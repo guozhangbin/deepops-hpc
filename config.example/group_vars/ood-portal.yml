@@ -98,79 +98,79 @@ ood_apps_catalog:
   # ---- OSC upstream (github.com/OSC) ----
   ansys_workbench:
     repo: "https://github.com/OSC/bc_osc_ansys_workbench.git"
-    enabled: true
+    enabled: false
   jupyter_spark:
     repo: "https://github.com/OSC/bc_osc_jupyter_spark.git"
-    enabled: true
+    enabled: false
   matlab:
     repo: "https://github.com/OSC/bc_osc_matlab.git"
-    enabled: true
+    enabled: false
   comsol:
     repo: "https://github.com/OSC/bc_osc_comsol.git"
-    enabled: true
+    enabled: false
   classroom_jupyter:
     repo: "https://github.com/OSC/bc_classroom_jupyter.git"
     version: main
-    enabled: true
+    enabled: false
   jupyter:
     repo: "https://github.com/OSC/bc_osc_jupyter.git"
     enabled: true   # enabling this REPLACES the local apps/jupyter app
   codeserver:
     repo: "https://github.com/OSC/bc_osc_codeserver.git"
-    enabled: true
+    enabled: false
   vmd:
     repo: "https://github.com/OSC/bc_osc_vmd.git"
-    enabled: true
+    enabled: false
   schrodinger:
     repo: "https://github.com/OSC/bc_osc_schrodinger.git"
     version: main
-    enabled: true
+    enabled: false
   rstudio_server:
     repo: "https://github.com/OSC/bc_osc_rstudio_server.git"
-    enabled: true
+    enabled: false
   pymol:
     repo: "https://github.com/OSC/bc_osc_pymol.git"
     version: main
-    enabled: true
+    enabled: false
   ollama:
     repo: "https://github.com/OSC/bc_osc_ollama.git"
     version: main
-    enabled: true
+    enabled: false
   mlflow:
     repo: "https://github.com/OSC/bc_osc_mlflow.git"
-    enabled: true
+    enabled: false
   tensorboard:
     repo: "https://github.com/OSC/bc_osc_tensorboard.git"
-    enabled: true
+    enabled: false
   paraview:
     repo: "https://github.com/OSC/bc_osc_paraview.git"
-    enabled: true
+    enabled: false
   abaqus:
     repo: "https://github.com/OSC/bc_osc_abaqus.git"
-    enabled: true
+    enabled: false
   classroom_rstudio:
     repo: "https://github.com/OSC/bc_classroom_rstudio.git"
     version: main
-    enabled: true
+    enabled: false
   # ---- DeepOps local (apps/ in this repo) ----
   ansysedt:
     local: ansysedt
-    enabled: true
+    enabled: false
   ansysfluent:
     local: ansysfluent
-    enabled: true
+    enabled: false
   lumerical:
     local: lumerical
-    enabled: true
+    enabled: false
   alphafold:
     local: alphafold
-    enabled: true
+    enabled: false
   cst_studio:
     local: cst_studio
-    enabled: true
+    enabled: false
   feko:
     local: feko
-    enabled: true
+    enabled: false
 
 # The OOD package also ships a generic "Desktop" Batch Connect app
 # (bc_desktop). playbooks/ood-portal.yml pins it to the deepops cluster,
