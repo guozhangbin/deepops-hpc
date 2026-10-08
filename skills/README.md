@@ -13,6 +13,7 @@ agent (or person) can simply read the relevant `SKILL.md` before acting.
 |-------|----------|
 | [deploy-slurm-cluster](deploy-slurm-cluster/SKILL.md) | Deploying or rebuilding a Slurm GPU cluster. |
 | [deploy-k8s-gpu-cluster](deploy-k8s-gpu-cluster/SKILL.md) | Deploying or rebuilding a Kubernetes GPU cluster. |
+| [deploy-ood-portal](deploy-ood-portal/SKILL.md) | Deploying the Open OnDemand web portal (UltraLAB HPC Cluster) and Batch Connect apps. |
 | [provision-with-maas](provision-with-maas/SKILL.md) | Provisioning, tagging, validating, or releasing machines through MAAS. |
 | [deploy-airgapped](deploy-airgapped/SKILL.md) | Preparing mirrors and deploying Slurm or Kubernetes without Internet access. |
 | [validate-gpu-cluster](validate-gpu-cluster/SKILL.md) | Health checks and post-deploy verification. |

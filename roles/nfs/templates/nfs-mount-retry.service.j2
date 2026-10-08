@@ -1,0 +1,14 @@
+# {{ ansible_managed | default('Managed by DeepOps') }}
+[Unit]
+Description=Retry DeepOps NFS mounts until the server is reachable
+Documentation=man:mountpoint(8)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/nfs-mount-retry.sh
+
+[Install]
+WantedBy=multi-user.target

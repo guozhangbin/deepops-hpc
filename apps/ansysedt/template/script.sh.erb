@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+<%# Main script of the ANSYS Electronics Desktop app (runs inside the Slurm
+    job under the VNC display started by the OOD vnc template — $DISPLAY is
+    already set by the template's run_script). -%>
+set -euo pipefail
+
+echo "Starting ANSYS Electronics Desktop on $(hostname) (display ${DISPLAY:-?})"
+
+# APP_CMD is exported by before.sh (form value "command"); fall back to the
+# standard launcher name. The software must be installed and on PATH on the
+# compute node (licensed product — see README.md).
+CMD="${APP_CMD:-ansysedt}"
+
+# shellcheck disable=SC2086
+exec ${CMD}

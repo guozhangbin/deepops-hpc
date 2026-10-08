@@ -1,0 +1,82 @@
+---
+# Wrapper role for the Open OnDemand portal.
+#
+# Structure follows NVIDIA/deepops 26.05 `roles/ood-wrapper`: a thin
+# playbook (playbooks/ood-portal.yml) applies this role in one of two
+# modes, and this role delegates the actual OOD installation to the
+# upstream OSC role (osc.open_ondemand, Galaxy) included from
+# tasks/server.yml.
+#
+#   ood_is_server -> portal host: install OOD + DeepOps site config
+#   ood_is_client -> compute node: Batch Connect app runtime
+#
+# Site-specific values (title, users, Slurm cluster, app repos) live in
+# config/group_vars/ood-portal.yml and override these defaults.
+
+# ---- Role mode flags (set by the playbook) ----------------------------------
+ood_is_server: false
+ood_is_client: false
+
+# ---- OOD package -------------------------------------------------------------
+# Pin the OOD release installed from the OSC yum repo (repo holds
+# 4.2.1 .. 4.2.4). "ondemand" would install the repo latest; "latest"
+# upgrades. Override in group_vars to change the release.
+ondemand_package: "ondemand-4.2.4"
+# SELinux is enforcing on the portal host; install OOD's SELinux policy.
+install_ondemand_selinux: true
+
+# Path constants for our site-config tasks. They mirror the
+# osc.open_ondemand role defaults (defaults/main/install.yml), which only
+# apply inside that role's own tasks — included-role defaults are not
+# visible to tasks that run after include_role. Keep in sync with the
+# upstream role.
+ood_base_conf_dir: "/etc/ood/config"
+apache_etc_dir: "/etc/httpd"
+apache_conf_dir: "/etc/httpd/conf.d"
+
+# ---- Batch Connect app catalog -----------------------------------------------
+# The catalog (config/group_vars/ood-portal.yml: ood_apps_catalog) lists the
+# "basic" apps, each with an `enabled` toggle (optional install):
+#   enabled + repo:  -> installed by the upstream osc.open_ondemand role's
+#                       git task (one app per repo, OSC style)
+#   enabled + local: -> copied from apps/<local> of this repo (DeepOps style)
+#   disabled        -> removed from /var/www/ood/apps/sys (menu hygiene)
+# Default: empty catalog (the portal ships its packaged apps + the local
+# Jupyter app only).
+ood_apps_catalog: {}
+
+# Apps in the catalog that are enabled.
+# NB: Jinja2 has no list comprehensions — selectattr/items2dict is the
+# idiomatic form.
+ood_apps_active: "{{ (ood_apps_catalog | default({})) | dict2items | selectattr('value.enabled', 'defined') | selectattr('value.enabled', 'equalto', true) | list | items2dict(key_name='key', value_name='value') }}"
+
+# Active apps backed by a git repo -> consumed by the upstream role's
+# "Install OOD apps" task ({name: {repo, version}} schema).
+ood_install_apps: "{{ ood_apps_active | dict2items | selectattr('value.repo', 'defined') | list | items2dict(key_name='key', value_name='value') }}"
+
+# Active apps backed by a local directory in this repo (apps/<dir>).
+ood_apps_local: "{{ ood_apps_active | dict2items | selectattr('value.local', 'defined') | list | items2dict(key_name='key', value_name='value') }}"
+
+# The local DeepOps Jupyter app (apps/jupyter) is installed unless the OSC
+# `jupyter` app is enabled in the catalog (both would claim apps/sys/jupyter).
+ood_jupyter_local_enabled: "{{ 'jupyter' not in ood_apps_active }}"
+
+# App source directories. Relative to the playbook directory
+# (playbooks/ -> repo root).
+ood_apps_src_dir: "{{ playbook_dir | default('.') }}/../apps"
+ood_jupyter_app_src: "{{ ood_apps_src_dir }}/jupyter"
+
+# Desktop app (bc_desktop) patching on the portal + VNC runtime on the
+# compute nodes. Set false to stop provisioning it.
+ood_desktop_app_enabled: true
+
+# First [ood-portal] host. Compute nodes allow this host's Batch Connect
+# proxy connections (random port 2000-65535) through the firewall.
+ood_portal_host: "{{ hostvars[groups['ood-portal'][0]].ansible_host }}"
+
+# ---- MOTD (dashboard "Message of the Day") ----------------------------------
+# Default content for the portal MOTD file (/opt/ood/portal_frame/motd).
+# Override in config/group_vars/ood-portal.yml with site-specific content.
+ood_portal_motd_content: "Welcome to the cluster portal."
+# Rendering format: plaintext, markdown, markdown_erb, osc, rss, or text_erb.
+ood_portal_motd_format: plaintext

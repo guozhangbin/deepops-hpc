@@ -33,3 +33,38 @@
     state: yes
     persistent: yes
   when: ansible_os_family == "RedHat"
+
+# Boot-order resilience: nodes and the NFS server (master) reboot
+# independently; when the nodes come up first the .mount units time out
+# and systemd never retries a failed mount (observed 2026-09-23: both
+# nodes lost /home and /sw after the ~01:2x reboot). Install a oneshot
+# that keeps retrying until all configured mounts are up.
+- name: install NFS mount retry script
+  ansible.builtin.template:
+    src: nfs-mount-retry.sh.j2
+    dest: /usr/local/sbin/nfs-mount-retry.sh
+    mode: "0755"
+  when: nfs_mounts|length
+  tags:
+    - nfs
+
+- name: install NFS mount retry service
+  ansible.builtin.template:
+    src: nfs-mount-retry.service.j2
+    dest: /etc/systemd/system/nfs-mount-retry.service
+    mode: "0644"
+  when: nfs_mounts|length
+  tags:
+    - nfs
+
+- name: enable NFS mount retry service
+  ansible.builtin.systemd:
+    name: nfs-mount-retry
+    state: started
+    enabled: true
+    daemon_reload: true
+  when:
+    - nfs_mounts|length
+    - ansible_os_family == "RedHat"
+  tags:
+    - nfs

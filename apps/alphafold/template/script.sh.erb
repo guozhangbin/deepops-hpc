@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+<%# Main script of the Jupyter app (runs inside the Slurm job).
+    $port is set by before.sh; CUDA_VISIBLE_DEVICES is set by Slurm when a
+    GPU was allocated. -%>
+set -euo pipefail
+
+echo "Starting Jupyter on $(hostname) (port ${port:-?})"
+
+# GPUs are hidden from ordinary SSH sessions on cluster nodes; inside a
+# Slurm job they are visible. Show the allocation when one was requested.
+if [[ -n "${CUDA_VISIBLE_DEVICES:-}" ]]; then
+  nvidia-smi || true
+fi
+
+# Run from the user's home directory (shared NFS) so notebooks/files persist
+# across sessions.
+cd "${HOME}"
+
+JUPYTER_ARGS=(
+  --ip=0.0.0.0
+  --port="${port}"
+  --no-browser
+  --allow-root
+  --ServerApp.token=''
+)
+
+# NB: template/*.erb files are rendered with a TemplateBinding (Struct with
+# `session` and `context`), so form values must be accessed as
+# `context.<attr>` — bare names raise NameError.
+<% if context.mode == "0" %>
+exec jupyter notebook "${JUPYTER_ARGS[@]}"
+<% else %>
+exec jupyter lab "${JUPYTER_ARGS[@]}"
+<% end %>

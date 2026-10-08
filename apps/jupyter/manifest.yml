@@ -1,0 +1,11 @@
+---
+name: Jupyter
+category: Interactive Apps
+subcategory: Servers
+role: batch_connect
+description: |
+  Launch a [Jupyter] server on a compute node of the UltraLAB HPC cluster
+  (Slurm 26). The session runs as a Slurm batch job and can optionally
+  allocate 1 GPU.
+
+  [Jupyter]: https://jupyter.org/

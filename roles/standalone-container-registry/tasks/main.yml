@@ -28,10 +28,69 @@
     state: present
   when: ansible_os_family == 'RedHat'
 
-- name: install python3 docker module
-  package:
-    name: python3-docker
+- name: install python3 docker and requests modules via pip
+  pip:
+    name:
+      - docker
+      - requests
     state: present
+
+- name: check if docker is running
+  command: docker info
+  register: docker_check
+  changed_when: false
+  failed_when: false
+
+- name: remove broken daemon.json to fix docker
+  file:
+    path: /etc/docker/daemon.json
+    state: absent
+  when: docker_check.rc != 0
+
+- name: restart docker after fixing config
+  service:
+    name: docker
+    state: restarted
+  when: docker_check.rc != 0
+
+- name: ensure docker is running
+  service:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: try direct pull of registry image
+  command: "docker pull {{ standalone_container_registry_image }}"
+  register: direct_pull
+  changed_when: "'Downloaded newer image' in direct_pull.stdout or 'Pull complete' in direct_pull.stdout"
+  failed_when: false
+
+- name: pull registry image from dedicated mirror
+  command: "docker pull {{ standalone_container_registry_image_mirror }}"
+  register: mirror_pull
+  changed_when: "'Downloaded newer image' in mirror_pull.stdout or 'Pull complete' in mirror_pull.stdout"
+  failed_when: false
+  when:
+    - direct_pull.rc != 0
+    - standalone_container_registry_image_mirror is defined
+    - standalone_container_registry_image_mirror | length > 0
+
+- name: tag mirrored registry image
+  command: "docker tag {{ standalone_container_registry_image_mirror }} {{ standalone_container_registry_image }}"
+  when:
+    - mirror_pull.rc is defined and mirror_pull.rc == 0
+  changed_when: false
+
+- name: fail if registry image could not be pulled
+  fail:
+    msg: >-
+      Failed to pull {{ standalone_container_registry_image }} from all sources.
+      Direct pull rc={{ direct_pull.rc }}.
+      Mirror pull rc={{ mirror_pull.rc | default('skipped') }}.
+      Please ensure network access or set standalone_container_registry_image_mirror to a working mirror.
+  when:
+    - direct_pull.rc != 0
+    - mirror_pull.rc is not defined or mirror_pull.rc != 0
 
 - name: run registry docker container
   docker_container:

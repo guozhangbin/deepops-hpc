@@ -1,0 +1,17 @@
+# {{ ansible_managed | default('Managed by DeepOps') }}
+[Unit]
+Description=Recover Slurm nodes stuck in the unexpected-reboot DOWN state
+Documentation=file:/usr/local/sbin/slurm-node-recover.sh
+After=network.target slurmctld.service
+Requires=slurmctld.service
+ConditionPathExists=/opt/deepops/bin/slurmctld
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/slurm-node-recover.sh
+# generous: waits for nodes to register after boot, may wait for queue to drain
+TimeoutStartSec=7500
+
+[Install]
+WantedBy=multi-user.target

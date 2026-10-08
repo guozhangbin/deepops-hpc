@@ -78,6 +78,12 @@ slurm-metric
 slurm-login
 
 ######
+# OPEN ONDEMAND PORTAL
+######
+[ood-portal]
+#master
+
+######
 # SSH connection configuration
 ######
 [all:vars]

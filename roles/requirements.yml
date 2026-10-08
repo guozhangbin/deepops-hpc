@@ -30,3 +30,7 @@ roles:
 - src: nvidia.enroot
   version: "v0.5.0"
 
+# Open OnDemand portal (OSC/ood-ansible; published on Galaxy as osc.open_ondemand)
+- src: osc.open_ondemand
+  version: ""
+

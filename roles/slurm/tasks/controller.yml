@@ -18,7 +18,9 @@
   with_items:
     - mariadb-server
     - python3-PyMySQL
-    - mailx
+    # RHEL 9 has no 'mailx' package; s-nail provides /usr/bin/mailx
+    # (and is also the RHEL 8 equivalent).
+    - s-nail
     - policycoreutils-python-utils
   when: ansible_os_family == "RedHat"
 
@@ -52,6 +54,9 @@
     host: localhost
     priv: "*.*:USAGE/slurm_acct_db.*:ALL"
     state: present
+    # RHEL MariaDB root@localhost rejects TCP logins (1698); the module's
+    # PyMySQL client treats "localhost" as TCP, so force the unix socket.
+    login_unix_socket: /var/lib/mysql/mysql.sock
 
 - name: create slurm directories
   file:
@@ -200,3 +205,29 @@
     state: restarted
     enabled: yes
     daemon-reload: yes
+
+# Boot-time self-healing: this cluster reboots ~daily (observed 09-21,
+# 09-22, 09-23 ~01:2x, common cause, unknown — see CHANGELOG). After a
+# reboot, nodes land in the Slurm 26.x "unexpected reboot" DOWN state
+# which scontrol cannot clear on this version. Install a oneshot that
+# performs the state-reset recovery at boot (only while the queue is
+# empty). The matching playbook task (auto-recover.yml) does the same on
+# every run.
+- name: install slurm node recovery script
+  template:
+    src: slurm-node-recover.sh.j2
+    dest: /usr/local/sbin/slurm-node-recover.sh
+    mode: "0755"
+
+- name: install slurm node recovery service
+  template:
+    src: slurm-node-recover.service.j2
+    dest: /etc/systemd/system/slurm-node-recover.service
+    mode: "0644"
+
+- name: enable slurm node recovery service
+  systemd:
+    name: slurm-node-recover
+    state: started
+    enabled: true
+    daemon-reload: true

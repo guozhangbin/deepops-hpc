@@ -1,0 +1,24 @@
+# Slurm batch options for the AlphaFold 2 app (rendered by the OOD dashboard).
+# NB: this file is rendered with a binding over the session context, so form
+# values are bare variables (e.g. "gpus"). By contrast, files under template/
+# are rendered with a TemplateBinding and must use context.<attr>.
+# NB: do NOT wrap prose in an ERB comment block here: an ERB comment ends at
+#     the FIRST closing tag, so any tag sequence inside it terminates the
+#     comment early and the leftover text leaks into the YAML document.
+---
+batch_connect:
+  template: "basic"
+  # Extra keys exported into connection.yml (host/port/password are always
+  # present; jupyter_api is set by before.sh)
+  conn_params:
+    - jupyter_api
+<% gpus_n = (gpus.to_s).to_i -%>
+script:
+  job_name: alphafold
+  queue_name: batch
+<% if gpus_n > 0 %>
+  gpus_per_node: <%= gpus_n %>
+<% end %>
+  native:
+    - "--time"
+    - "<%= walltime %>"

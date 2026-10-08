@@ -24,3 +24,7 @@ __pycache__/
 /k8s-config/
 /kubectl
 /tridentctl
+
+# local tooling / editor artifacts (not for commit)
+/.ansible/
+/.vscode/

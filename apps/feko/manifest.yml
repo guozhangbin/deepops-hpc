@@ -1,0 +1,12 @@
+---
+name: Altair Feko
+category: Interactive Apps
+subcategory: Engineering
+role: batch_connect
+description: |
+  Launch Altair Feko in a VNC session on a compute node of
+  the UltraLAB HPC cluster (Slurm). The session runs as a Slurm batch job;
+  interact with the GUI through the browser (noVNC).
+
+  The licensed software installation must be available on the compute node
+  (see README.md).

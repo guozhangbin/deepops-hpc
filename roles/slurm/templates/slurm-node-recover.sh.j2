@@ -1,0 +1,72 @@
+#!/bin/bash
+# {{ ansible_managed | default('Managed by DeepOps') }}
+# Recover Slurm nodes stuck in the Slurm 26.x "Node unexpectedly rebooted"
+# DOWN state. On this Slurm version (26.05.3, verified 2026-09-21/23):
+#   * scontrol update NodeName=X NodeState=RESUME|IDLE  -> REJECTED
+#   * ReturnToService=1                                 -> does not clear it
+# The only working recovery is to reset the controller state directory
+# and restart slurmctld, after which the nodes' slurmd reconnect and
+# re-register as idle. See README.zh-CN.md §7.1.
+#
+# Safety: only acts while the queue is EMPTY (a state reset would drop
+# in-flight job state). If jobs are running, it waits (up to 2h) for the
+# queue to drain before recovering.
+set -u
+
+CTLD_STATE=/var/spool/slurm/ctld
+MAX_WAIT=7200      # 2h
+POLL=30
+
+down_nodes() {
+  sinfo -o "%t %n" -n -r 2>/dev/null | awk '$1 ~ /down/ {print $2}' | sort -u
+}
+
+queue_len() {
+  squeue --noheader 2>/dev/null | wc -l
+}
+
+recover() {
+  logger -t slurm-node-recover "recovering stuck DOWN node(s): $(down_nodes | tr '\n' ' ')"
+  systemctl stop slurmctld
+  if [ -d "$CTLD_STATE" ]; then
+    mv "$CTLD_STATE" "$CTLD_STATE.bak.$(date +%s)"
+  fi
+  # keep only the latest state backup
+  ls -1dt /var/spool/slurm/ctld.bak.* 2>/dev/null | tail -n +2 | xargs -r rm -rf
+  mkdir -p "$CTLD_STATE"
+  chown slurm:slurm "$CTLD_STATE"
+  chmod 700 "$CTLD_STATE"
+  systemctl start slurmctld
+  # running slurmd instances reconnect to the fresh controller on their
+  # own; give them up to 5 minutes to re-register as idle
+  for i in $(seq 1 60); do
+    [ -z "$(down_nodes)" ] && { logger -t slurm-node-recover "recovery OK"; return 0; }
+    sleep 5
+  done
+  logger -t slurm-node-recover "error: nodes still down after recovery"
+  return 1
+}
+
+# wait for slurmctld to answer
+for i in $(seq 1 60); do
+  sinfo >/dev/null 2>&1 && break
+  sleep 5
+done
+
+# main loop: recover when (a) nodes are down and (b) the queue is empty
+elapsed=0
+while [ "$elapsed" -lt "$MAX_WAIT" ]; do
+  if [ -z "$(down_nodes)" ]; then
+    exit 0   # all nodes healthy
+  fi
+  q=$(queue_len)
+  if [ "$q" -eq 0 ]; then
+    recover && exit 0
+  else
+    logger -t slurm-node-recover "node(s) down but queue has $q job(s); waiting"
+  fi
+  sleep "$POLL"
+  elapsed=$((elapsed + POLL))
+done
+logger -t slurm-node-recover "giving up after ${MAX_WAIT}s"
+exit 0

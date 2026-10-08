@@ -21,6 +21,40 @@
         - container_manager is defined
         - container_manager == "docker"
 
+- name: Fix broken Docker config on all nodes
+  hosts: all
+  gather_facts: false
+  become: true
+  tasks:
+    - name: check if docker is running
+      command: docker info
+      register: docker_check
+      changed_when: false
+      failed_when: false
+    - name: remove backticks from docker-options.conf
+      replace:
+        path: /etc/systemd/system/docker.service.d/docker-options.conf
+        regexp: '`'
+        replace: ''
+      register: fix_backticks
+    - name: remove broken daemon.json
+      file:
+        path: /etc/docker/daemon.json
+        state: absent
+      when: docker_check.rc != 0
+    - name: reload systemd after fixing docker config
+      systemd:
+        daemon_reload: yes
+      when: fix_backticks is changed
+    - name: restart docker after fixing config
+      service:
+        name: docker
+        state: restarted
+      when:
+        - docker_check.rc != 0 or fix_backticks is changed
+  tags:
+    - fix-docker
+
 - name: Install python required for Ansible
   import_playbook: bootstrap/bootstrap-python.yml
   tags:

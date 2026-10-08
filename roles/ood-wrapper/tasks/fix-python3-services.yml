@@ -1,0 +1,126 @@
+---
+# ---------------------------------------------------------------------------
+# Repair distro services broken by the base image's python3 alternative
+# (manually pointed at python3.11 since 2026-09-08):
+#
+#   * /usr/sbin/firewalld, /usr/sbin/tuned*, /usr/sbin/setroubleshootd
+#     and /usr/bin/firewall-cmd are python scripts whose dependencies
+#     (python3-dbus, tuned, PyGObject) ship for python3.9 — with
+#     python3 -> 3.11 they crash with ModuleNotFoundError
+#     ("No module named 'dbus'" / "No module named 'gi'"). Fix: pin
+#     their shebangs to python3.9. The global alternative is left
+#     alone on purpose: the Jupyter runtime on the compute nodes is
+#     installed for 3.11 and must keep working.
+#   * nvidia-persistenced: the unit runs as user `nvidia-persistenced`,
+#     but a hand-added drop-in passed `--user root`, so the daemon tried
+#     to chown its runtime dir to root and died with "Failed to change
+#     ownership of /var/run/nvidia-persistenced: Operation not
+#     permitted". Fix: rewrite the drop-in without `--user root` and
+#     clear the stale runtime dir the failed runs leave behind.
+#
+# All tasks are idempotent (no-ops once healthy). The same file is
+# included from server.yml (portal host) and client.yml (compute
+# nodes).
+# ---------------------------------------------------------------------------
+
+- name: gather service facts (python-service repair)
+  ansible.builtin.service_facts:
+
+- name: Check that python3.9 is available (repair target interpreter)
+  ansible.builtin.stat:
+    path: /usr/bin/python3.9
+  register: py39
+
+- name: stat distro python service entry points
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /usr/sbin/firewalld
+    - /usr/sbin/tuned
+    - /usr/sbin/tuned-adm
+    - /usr/sbin/tuned-ppd
+    - /usr/sbin/setroubleshootd
+    - /usr/bin/firewall-cmd
+  register: py_service_files
+  when: py39.stat.exists
+
+# Matches `#!/usr/bin/python3 -s` / `#!/usr/bin/python3 -Es` / bare
+# `#!/usr/bin/python3` — but NOT the already-correct `python3.9`.
+- name: Pin broken python service shebangs to python3.9
+  ansible.builtin.replace:
+    path: "{{ item }}"
+    regexp: "^#!/usr/bin/python3(\\s|$)"
+    replace: "#!/usr/bin/python3.9\\1"
+  loop: "{{ py_service_files.results | selectattr('stat.exists') | map(attribute='item') | list }}"
+  register: shebang_fix
+  when: py39.stat.exists
+
+- name: Detect the broken nvidia-persistenced drop-in (--user root)
+  ansible.builtin.shell:
+    cmd: ls /etc/systemd/system/nvidia-persistenced.service.d/*.conf 2>/dev/null | xargs -r grep -l -- "--user root" 2>/dev/null
+  register: broken_persist_dropin
+  changed_when: false
+  failed_when: false
+  when: "'nvidia-persistenced.service' in ansible_facts.services"
+
+- name: Rewrite nvidia-persistenced drop-in without --user root
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/nvidia-persistenced.service.d/override.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Service]
+      ExecStart=
+      ExecStart=/usr/bin/nvidia-persistenced --persistence-mode --verbose
+  when:
+    - "'nvidia-persistenced.service' in ansible_facts.services"
+    - broken_persist_dropin.stdout | default('') | trim | length > 0
+
+- name: Reload systemd after the nvidia-persistenced drop-in fix
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when:
+    - "'nvidia-persistenced.service' in ansible_facts.services"
+    - broken_persist_dropin.stdout | default('') | trim | length > 0
+
+- name: Remove stale nvidia-persistenced runtime dir (blocks daemon start)
+  ansible.builtin.file:
+    path: /run/nvidia-persistenced
+    state: absent
+  when:
+    - "'nvidia-persistenced.service' in ansible_facts.services"
+    - ansible_facts.services['nvidia-persistenced.service'].state != 'running'
+
+# `state: started` is idempotent: already-running services are untouched,
+# failed/stopped ones (broken shebang or stale runtime dir) start now
+# that the repairs above have landed.
+- name: Ensure firewalld is running (if installed)
+  ansible.builtin.systemd:
+    name: firewalld
+    state: started
+  when:
+    - "'firewalld.service' in ansible_facts.services"
+    - py_service_files.results | selectattr('item', 'eq', '/usr/sbin/firewalld') | selectattr('stat.exists') | list | length > 0
+
+- name: Ensure setroubleshootd is running (if installed)
+  ansible.builtin.systemd:
+    name: setroubleshootd
+    state: started
+  when:
+    - "'setroubleshootd.service' in ansible_facts.services"
+    - py_service_files.results | selectattr('item', 'eq', '/usr/sbin/setroubleshootd') | selectattr('stat.exists') | list | length > 0
+
+- name: Ensure tuned is running (if installed)
+  ansible.builtin.systemd:
+    name: tuned
+    state: started
+  when:
+    - "'tuned.service' in ansible_facts.services"
+    - py_service_files.results | selectattr('item', 'eq', '/usr/sbin/tuned') | selectattr('stat.exists') | list | length > 0
+
+- name: Ensure nvidia-persistenced is running (if present)
+  ansible.builtin.systemd:
+    name: nvidia-persistenced
+    state: started
+  when: "'nvidia-persistenced.service' in ansible_facts.services"

@@ -23,6 +23,7 @@ MARKUPSAFE_VERSION="${MARKUPSAFE_VERSION:-3.0.2}"  # MarkupSafe version
 PIP="${PIP:-pip3}"                              # Pip binary to use
 PYTHON_BIN="${PYTHON_BIN:-/usr/bin/python3}"    # Python3 path
 VENV_DIR="${VENV_DIR:-/opt/deepops/env}"        # Path to python virtual environment to create
+GH_PROXY="${GH_PROXY:-}"                        # GitHub proxy prefix, e.g. https://gh-proxy.org
 
 ###
 
@@ -30,6 +31,7 @@ VENV_DIR="${VENV_DIR:-/opt/deepops/env}"        # Path to python virtual environ
 . /etc/os-release
 DEPS_DEB=(git virtualenv python3-virtualenv sshpass wget)
 DEPS_EL=(git python3-libselinux python3-virtualenv sshpass wget)
+DEPS_EL_VENV=(git python3-libselinux sshpass wget)
 EPEL_VERSION="$(echo ${VERSION_ID} | sed  's/^[^0-9]*//;s/[^0-9].*$//')"
 EPEL_URL="https://dl.fedoraproject.org/pub/epel/epel-release-latest-${EPEL_VERSION}.noarch.rpm"
 PROXY_USE=`grep -v ^# ${SCRIPT_DIR}/deepops/proxy.sh 2>/dev/null | grep -v ^$ | wc -l`
@@ -46,21 +48,19 @@ fi
 # Proxy wrapper
 as_sudo(){
     if [ $PROXY_USE -gt 0 ] ; then
-        cmd="sudo -H bash -c '. ${SCRIPT_DIR}/deepops/proxy.sh && $@'"
+        sudo -H bash -c ". ${SCRIPT_DIR}/deepops/proxy.sh && $*"
     else
-        cmd="sudo bash -c '$@'"
+        sudo bash -c "$*"
     fi
-    eval $cmd
 }
 
 # Proxy wrapper
 as_user(){
     if [ $PROXY_USE -gt 0 ] ; then
-        cmd="bash -c '. ${SCRIPT_DIR}/deepops/proxy.sh && $@'"
+        bash -c ". ${SCRIPT_DIR}/deepops/proxy.sh && $*"
     else
-        cmd="bash -c '$@'"
+        bash -c "$*"
     fi
-    eval $cmd
 }
 
 # Install software dependencies
@@ -68,6 +68,10 @@ case "$ID" in
     rhel*|centos*)
         as_sudo "yum -y -q install ${EPEL_URL} |& grep -v 'Nothing to do'"       # Enable EPEL (required for sshpass package)
         as_sudo "yum -y -q install ${DEPS_EL[@]}"
+        ;;
+    rocky|almalinux)
+        as_sudo "yum -y -q install ${EPEL_URL} |& grep -v 'Nothing to do'"
+        as_sudo "yum -y -q install ${DEPS_EL_VENV[@]}"
         ;;
     ubuntu*)
         as_sudo "apt-get -q update"
@@ -85,47 +89,56 @@ case "$ID" in
         ;;
 esac
 
-# Create virtual environment and install python dependencies
+# Create virtual environment
 if command -v virtualenv &> /dev/null ; then
     sudo mkdir -p "${VENV_DIR}"
     sudo chown -R $(id -u):$(id -g) "${VENV_DIR}"
     deactivate nondestructive &> /dev/null
     virtualenv -q --python="${PYTHON_BIN}" "${VENV_DIR}"
     . "${VENV_DIR}/bin/activate"
-    as_user "${PIP} install -q --upgrade pip"
-    as_user "${PIP} install -q packaging"
-
-    # Check for any installed ansible pip package
-    if pip show ansible 2>&1 >/dev/null; then
-        current_version=$(pip show ansible | grep Version | awk '{print $2}')
-	echo "Current version of Ansible is ${current_version}"
-	if "${VENV_DIR}/bin/python3" -c "from packaging.version import Version; print(Version('$current_version') >= Version('$ANSIBLE_TOO_NEW'))" | grep True 2>&1 >/dev/null; then
-            echo "Ansible version ${current_version} too new for DeepOps"
-	    echo "Please uninstall any ansible, ansible-base, and ansible-core packages and re-run this script"
-	    exit 1
-	fi
-	if "${VENV_DIR}/bin/python3" -c "from packaging.version import Version; print(Version('$current_version') < Version('$ANSIBLE_VERSION'))" | grep True 2>&1 >/dev/null; then
-	    echo "Ansible will be upgraded from ${current_version} to ${ANSIBLE_VERSION}"
-	fi
-    fi
-
-    as_user "${PIP} install -q --upgrade \
-        ansible==${ANSIBLE_VERSION} \
-	ansible-lint==${ANSIBLE_LINT_VERSION} \
-        Jinja2==${JINJA2_VERSION} \
-        netaddr \
-        packaging \
-        ruamel.yaml \
-        PyMySQL \
-        passlib \
-        paramiko \
-        jmespath==${JMESPATH_VERSION} \
-        MarkupSafe==${MARKUPSAFE_VERSION} \
-        selinux"
+elif "${PYTHON_BIN}" -m venv --help &> /dev/null ; then
+    sudo mkdir -p "${VENV_DIR}"
+    sudo chown -R $(id -u):$(id -g) "${VENV_DIR}"
+    deactivate nondestructive &> /dev/null
+    "${PYTHON_BIN}" -m venv "${VENV_DIR}"
+    . "${VENV_DIR}/bin/activate"
 else
-    echo "ERROR: Unable to create Python virtual environment, 'virtualenv' command not found"
+    echo "ERROR: Unable to create Python virtual environment, 'virtualenv' command not found and 'python3 -m venv' not available"
     exit 1
 fi
+
+# Install python dependencies into virtual environment
+as_user "${PIP} install -q --upgrade pip"
+as_user "${PIP} install -q packaging"
+
+# Check for any installed ansible pip package
+if pip show ansible 2>&1 >/dev/null; then
+    current_version=$(pip show ansible | grep Version | awk '{print $2}')
+    echo "Current version of Ansible is ${current_version}"
+    if "${VENV_DIR}/bin/python3" -c "from packaging.version import Version; print(Version('$current_version') >= Version('$ANSIBLE_TOO_NEW'))" | grep True 2>&1 >/dev/null; then
+        echo "Ansible version ${current_version} too new for DeepOps"
+        echo "Please uninstall any ansible, ansible-base, and ansible-core packages and re-run this script"
+        exit 1
+    fi
+    if "${VENV_DIR}/bin/python3" -c "from packaging.version import Version; print(Version('$current_version') < Version('$ANSIBLE_VERSION'))" | grep True 2>&1 >/dev/null; then
+        echo "Ansible will be upgraded from ${current_version} to ${ANSIBLE_VERSION}"
+    fi
+fi
+
+as_user "${PIP} install -q --upgrade \
+    ansible==${ANSIBLE_VERSION} \
+    ansible-lint==${ANSIBLE_LINT_VERSION} \
+    Jinja2==${JINJA2_VERSION} \
+    netaddr \
+    packaging \
+    ruamel.yaml \
+    PyMySQL \
+    passlib \
+    paramiko \
+    jmespath==${JMESPATH_VERSION} \
+    MarkupSafe==${MARKUPSAFE_VERSION} \
+    selinux \
+    argcomplete"
 
 # Clone DeepOps git repo if running standalone
 if ! (cd "${SCRIPT_DIR}/.." && grep -i deepops README.md >/dev/null 2>&1 ) ; then
@@ -148,6 +161,12 @@ if grep -i deepops README.md >/dev/null 2>&1 ; then
     else
         echo "Configuration directory '${CONFIG_DIR}' exists, not overwriting"
     fi
+fi
+
+# Configure GitHub proxy for git operations (ansible-galaxy, git submodule, etc.)
+if [ -n "${GH_PROXY}" ] && command -v git &> /dev/null ; then
+    git config --global url."${GH_PROXY}/https://github.com/".insteadOf "https://github.com/"
+    echo "Configured git to use GitHub proxy: ${GH_PROXY}"
 fi
 
 # Install Ansible Galaxy roles

@@ -1,6 +1,7 @@
 [Unit]
 Description=Prometheus Slurm Exporter
-After=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
 Requires=docker.service
 PartOf=docker.service
 

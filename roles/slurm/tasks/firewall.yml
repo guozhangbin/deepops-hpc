@@ -1,0 +1,92 @@
+---
+# Slurm needs bidirectional host-to-host traffic:
+#   6817/tcp slurmctld, 6818/tcp slurmd, 11310/tcp munge.
+# RHEL-family nodes ship a default-deny firewall zone (firewalld), and
+# Slurm 26.x pings nodes by connecting to slurmd (6818); with the port
+# closed, nodes register once and then flap to NOT_RESPONDING/DOWN within
+# a minute of every boot. Allow the Slurm ports on every cluster host.
+- name: gather package facts
+  package_facts:
+    manager: rpm
+  when:
+    - ansible_os_family == "RedHat"
+
+- name: gather service facts
+  ansible.builtin.service_facts:
+  when:
+    - ansible_os_family == "RedHat"
+
+# Slurm ports (6817/6818/11310) plus the monitoring scrape ports that the
+# Prometheus on the head node uses to reach per-node exporters:
+#   9100 node-exporter, 9400 dcgm-exporter. Without these, the native
+#   node_exporter process is unreachable cross-network (default-deny zone).
+- name: configure firewall to allow Slurm and monitoring scrape ports
+  ansible.posix.firewalld:
+    # ansible.posix.firewalld expects "port/proto" (slash), not "port:proto".
+    port: "{{ item }}/tcp"
+    permanent: yes
+    state: enabled
+    immediate: no
+  with_items:
+    - "6817"
+    - "6818"
+    - "11310"
+    - "9100"
+    - "9400"
+  when:
+    - ansible_os_family == "RedHat"
+    - "'firewalld' in ansible_facts.packages"
+
+# Slurm step launch is two-phase: the controller tells slurmd to start the
+# step, and slurmd must connect BACK to the requesting host's ephemeral IO
+# port (e.g. `launch task ... HOST:<login> PORT:<ephemeral>`). A
+# default-deny firewall on the requesting host REJECTs that return
+# connection and the step dies with
+#   "Slurmd could not connect IO" / "connect io: No route to host"
+# (interactive `srun` from the login node hangs the same way). Port lists
+# cannot cover ephemeral ports, so trust the cluster peer hosts instead —
+# this is a dedicated cluster network, and the traffic is Slurm's own.
+- name: Allow traffic between cluster hosts (Slurm step IO return connections)
+  ansible.posix.firewalld:
+    rich_rule: "rule family=ipv4 source address={{ hostvars[item]['ansible_host'] }}/32 accept"
+    permanent: yes
+    state: enabled
+  with_items: >-
+    {{ (groups['slurm-cluster'] | default([]))
+       | reject('equalto', inventory_hostname) | list }}
+  when:
+    - ansible_os_family == "RedHat"
+    - "'firewalld' in ansible_facts.packages"
+    - hostvars[item].get('ansible_host') is defined
+
+# Head-node service ports for external clients (portal, monitoring,
+# container registry). Without these a working firewalld blocks the
+# dashboard/portal from every non-cluster machine.
+- name: Allow head-node service ports (portal, monitoring, registry)
+  ansible.posix.firewalld:
+    port: "{{ item }}/tcp"
+    permanent: yes
+    state: enabled
+  with_items:
+    - "80"
+    - "443"
+    - "3000"
+    - "5000"
+    - "5001"
+    - "8080"
+    - "9090"
+    - "9093"
+  when:
+    - ansible_os_family == "RedHat"
+    - "'firewalld' in ansible_facts.packages"
+    - inventory_hostname in (groups['slurm-master'] | default([]))
+
+- name: restart firewalld if it was running
+  ansible.builtin.systemd:
+    state: restarted
+    name: firewalld
+  when:
+    - ansible_os_family == "RedHat"
+    - "'firewalld' in ansible_facts.packages"
+    - "'firewalld.service' in ansible_facts.services"
+    - ansible_facts.services['firewalld.service']['state'] == "running"

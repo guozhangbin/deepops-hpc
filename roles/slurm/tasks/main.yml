@@ -7,6 +7,9 @@
 - name: Setup role
   include_tasks: setup-role.yml
 
+- name: Setup firewall for Slurm
+  include_tasks: firewall.yml
+
 - name: Setup build
   include_tasks: build.yml
   tags: build
@@ -46,3 +49,10 @@
 
 - name: Cleanup
   include_tasks: build-cleanup.yml
+
+# Self-healing: recover nodes stuck in the Slurm 26.x "unexpected reboot"
+# DOWN state (see auto-recover.yml for the rationale). No-op when all
+# nodes are up; safe only while the queue is empty (enforced in-task).
+- name: Auto-recover DOWN nodes (controller only)
+  include_tasks: auto-recover.yml
+  when: is_controller

@@ -1,0 +1,36 @@
+#!/bin/bash
+# {{ ansible_managed | default('Managed by DeepOps') }}
+# Retry the DeepOps NFS mounts until the server (master) is reachable.
+#
+# Why this exists: the compute nodes and the NFS server (master) are
+# rebooted independently. When the nodes come up first, their
+# <mount>.mount units time out (the server is still down) and systemd
+# does NOT retry a failed .mount unit — /home and /sw stay unmounted and
+# every job that touches the home directory fails. This oneshot service
+# keeps trying until all configured mounts are up (max ~10 minutes),
+# after which it exits 0 and leaves the system in a consistent state.
+set -u
+
+mountpoints=( {{ nfs_mounts | map(attribute='mountpoint') | list | map('quote') | join(' ') }} )
+attempts=60
+delay=10
+
+all_mounted() {
+  local mp
+  for mp in "${mountpoints[@]}"; do
+    mountpoint -q "$mp" || return 1
+  done
+  return 0
+}
+
+for i in $(seq 1 "$attempts"); do
+  if all_mounted; then
+    exit 0
+  fi
+  mount -a 2>/dev/null || true
+  sleep "$delay"
+done
+
+# Give up: log and leave the mounts to the next boot / manual mount.
+logger -t nfs-mount-retry "error: NFS mounts not ready after $((attempts * delay))s: ${mountpoints[*]}"
+exit 0

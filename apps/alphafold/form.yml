@@ -1,0 +1,32 @@
+---
+cluster:
+  - "deepops"
+form:
+  - mode
+  - gpus
+  - walltime
+attributes:
+  mode:
+    label: "Interface"
+    widget: "radio"
+    value: "1"
+    options:
+      - ["Jupyter Lab", "1"]
+      - ["Jupyter Notebook", "0"]
+    help: "Notebook interface for AlphaFold 2 work"
+  # NB: valid widgets in OOD 4.2's create_widget: select, check_box,
+  # radio/radio_button, path_selector, file_attachments, resolution_field,
+  # or anything BootstrapForm exposes (e.g. text_field). "number" and
+  # "text" are NOT valid and 500 the form render.
+  gpus:
+    label: "GPUs"
+    widget: "text_field"
+    default: 1
+    min: 0
+    max: 1
+    help: "Number of GPUs to allocate (0 for CPU-only)"
+  walltime:
+    label: "Max run time (HH:MM:SS)"
+    widget: "text_field"
+    value: "04:00:00"
+    help: "Job walltime limit; the session is killed when it elapses"

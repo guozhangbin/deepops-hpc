@@ -73,8 +73,13 @@
   changed_when: false
   when: slurm_exporter_build_image
 
+# --network=host: buildkit's default (bridge) build sandbox fails to resolve
+# external names on restricted/IPv6-egress networks ("Temporary failure
+# resolving 'archive.ubuntu.com'"), so apt-get in the runtime stage cannot
+# fetch packages. Building with host networking reuses the host's working
+# resolver/network and is harmless elsewhere.
 - name: build exporter image
-  command: docker build -t {{ slurm_exporter_container }} {{ slurm_exporter_build_dir }}
+  command: docker build --network=host -t {{ slurm_exporter_container }} {{ slurm_exporter_build_dir }}
   when: >
     slurm_exporter_build_image and
     (slurm_exporter_image_check.rc != 0 or slurm_exporter_dockerfile.changed or slurm_exporter_source.changed)

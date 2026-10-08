@@ -1,0 +1,9 @@
+---
+# Dispatch (same pattern as NVIDIA/deepops 26.05 roles/ood-wrapper).
+- name: Setup Open OnDemand portal
+  ansible.builtin.include_tasks: server.yml
+  when: ood_is_server | bool
+
+- name: Setup OOD Batch Connect app runtime on compute node
+  ansible.builtin.include_tasks: client.yml
+  when: ood_is_client | bool

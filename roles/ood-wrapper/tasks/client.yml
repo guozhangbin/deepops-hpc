@@ -1,0 +1,319 @@
+---
+# Compute node (client) side of the OOD deployment: the runtime the
+# Batch Connect apps need on Slurm compute nodes.
+#
+#   * firewall: allow the portal host's /node /rnode proxy connections
+#   * Jupyter: pip-installed runtime (JupyterLab + Notebook)
+#   * Desktop: TigerVNC + Xfce4 + websockify (for the bc_desktop app)
+
+- name: gather package facts
+  ansible.builtin.package_facts:
+    manager: rpm
+
+# The default-deny zone would block the portal host's Batch Connect
+# proxy connections to the job's random port. Allow the portal host
+# (covers the /node and /rnode proxy traffic).
+- name: Allow the portal host to reach Batch Connect app ports
+  ansible.posix.firewalld:
+    rich_rule: "rule family=ipv4 source address={{ ood_portal_host }}/32 accept"
+    permanent: yes
+    state: enabled
+  when:
+    - ansible_os_family == "RedHat"
+    - "'firewalld' in ansible_facts.packages"
+
+- name: gather service facts
+  ansible.builtin.service_facts:
+
+- name: restart firewalld if it was running
+  ansible.builtin.systemd:
+    state: restarted
+    name: firewalld
+  when:
+    - ansible_os_family == "RedHat"
+    - "'firewalld' in ansible_facts.packages"
+    - "'firewalld.service' in ansible_facts.services"
+    - ansible_facts.services['firewalld.service']['state'] == "running"
+
+# Jupyter runtime for the Batch Connect Jupyter app (system-wide, so it
+# is available to every portal user's jobs).
+- name: Install Python and pip (for the Jupyter runtime)
+  ansible.builtin.package:
+    name:
+      - python3
+      - python3-pip
+    state: present
+
+# NB: the ansible.pip collection is not part of the pinned dependency
+# set, so pip is driven via command (pip itself is idempotent).
+- name: Upgrade pip (old distro pip struggles with modern package metadata)
+  ansible.builtin.command:
+    argv:
+      - pip3
+      - install
+      - --upgrade
+      - --index-url
+      - "https://mirrors.aliyun.com/pypi/simple/"
+      - --trusted-host
+      - mirrors.aliyun.com
+      - pip
+  register: pip_upgrade
+  changed_when: "'Installing collected packages' in (pip_upgrade.stdout | default('') ~ pip_upgrade.stderr | default(''))"
+  timeout: 900
+  when: not ansible_check_mode
+
+- name: Check if the Jupyter runtime is already installed
+  ansible.builtin.command: python3 -c "import jupyterlab"
+  register: jupyterlab_present
+  changed_when: false
+  failed_when: false
+  when: not ansible_check_mode
+
+# NB: --ignore-installed works around distro (rpm) packages such as
+# python3-websocketclient that pip cannot uninstall ("no RECORD file").
+- name: Install Jupyter (Lab + Notebook) runtime
+  ansible.builtin.command:
+    argv:
+      - pip3
+      - install
+      - --ignore-installed
+      - --index-url
+      - "https://mirrors.aliyun.com/pypi/simple/"
+      - --trusted-host
+      - mirrors.aliyun.com
+      - jupyterlab
+      - notebook
+  changed_when: true
+  timeout: 1800
+  when:
+    - not ansible_check_mode
+    - jupyterlab_present.rc != 0
+
+- name: Verify Jupyter runtime
+  ansible.builtin.command: jupyter --version
+  register: jupyter_version
+  changed_when: false
+  failed_when: false
+  when: not ansible_check_mode
+
+# ---------------------------------------------------------------------------
+# AI stack for the Jupyter runtime: PyTorch (CUDA build) + llama.cpp
+# (llama-cpp-python). System-wide, so every portal user's Jupyter job can
+# `import torch, llama_cpp` without installing anything per session.
+#
+# NB: torch is PINNED to 2.1.2 (the cu118 wheel on PyPI). The cluster GPUs
+# are GTX 750 (sm_50, Maxwell) and GTX 1050 (sm_61, Pascal); torch >= 2.2
+# only ships kernels for sm_70+ and fails on these cards with
+# "no kernel image is available for execution on the device". numpy is
+# pinned to 1.26.4 (torch 2.1 predates the numpy 2.x ABI).
+# ---------------------------------------------------------------------------
+- name: Check if the AI stack (PyTorch + llama.cpp) is already installed
+  ansible.builtin.command: python3 -c "import torch, llama_cpp"
+  register: ai_stack_present
+  changed_when: false
+  failed_when: false
+  when: not ansible_check_mode
+
+- name: Install PyTorch (2.1.2 cu118) + llama.cpp (for the Jupyter runtime)
+  ansible.builtin.command:
+    argv:
+      - pip3
+      - install
+      - --index-url
+      - "https://mirrors.aliyun.com/pypi/simple/"
+      - --trusted-host
+      - mirrors.aliyun.com
+      - "torch==2.1.2"
+      - "numpy==1.26.4"
+      - llama-cpp-python
+  register: ai_stack_install
+  changed_when: "'Installing collected packages' in (ai_stack_install.stdout | default('') ~ ai_stack_install.stderr | default(''))"
+  timeout: 7200
+  when:
+    - not ansible_check_mode
+    - ai_stack_present.rc != 0
+
+# The pip nvidia-*-cu11 packages ship their .so files under
+# <site-packages>/nvidia/*/lib, which is not on the dynamic loader path.
+# Without this, `import torch` dies with "libcudnn.so.9: cannot open
+# shared object file". Register the directories with ldconfig
+# (idempotent; re-asserted on every run).
+# NB: python (not a shell script) — Ansible's shell-argument splitter
+# chokes on the nested quotes/`$( )` in the shell form of this task.
+- name: Register the pip nvidia CUDA libraries with the dynamic loader
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -c
+      - |
+        import glob, os, site, subprocess
+        conf = "/etc/ld.so.conf.d/pytorch-nvidia.conf"
+        # site-packages may live under lib/ AND lib64/ on RHEL-family
+        # pythons (e.g. /usr/local/lib64/python3.9/site-packages and
+        # /usr/local/lib/python3.9/site-packages): cover both siblings.
+        bases = []
+        for p in site.getsitepackages():
+            root = os.path.dirname(p)        # .../libX/python3.9
+            grand = os.path.dirname(os.path.dirname(root))
+            for sib in ("lib", "lib64"):
+                cand = os.path.join(grand, sib, os.path.basename(root), "site-packages")
+                if os.path.isdir(cand) and cand not in bases:
+                    bases.append(cand)
+        lines = set()
+        for b in bases:
+            for d in glob.glob(os.path.join(b, "nvidia", "*", "lib")):
+                if os.path.isdir(d):
+                    lines.add(d)
+        # merge any still-valid entries from a previous run (defense
+        # against an empty glob wiping a good config)
+        if os.path.exists(conf):
+            for old in open(conf).read().splitlines():
+                if old and os.path.isdir(old):
+                    lines.add(old)
+        with open(conf, "w") as f:
+            f.write("\n".join(sorted(lines)) + ("\n" if lines else ""))
+        subprocess.run(["ldconfig"], check=True)
+  register: nvidia_ldconfig
+  changed_when: nvidia_ldconfig.rc == 0
+  when: not ansible_check_mode
+
+- name: Verify AI stack (torch CUDA import, llama_cpp)
+  ansible.builtin.command: >-
+    python3 -c
+    "import torch, llama_cpp; print('torch', torch.__version__, 'cuda:', torch.cuda.is_available())"
+  register: ai_stack_verify
+  changed_when: false
+  failed_when: false
+  when: not ansible_check_mode
+
+# ---------------------------------------------------------------------------
+# Desktop app (bc_desktop) runtime: TigerVNC + Xfce4 + websockify
+#
+# The OOD vnc batch-connect template (ood_core) starts `vncserver`
+# inside the Slurm job, runs the desktop session under its display,
+# and proxies the VNC port to noVNC through websockify on a free
+# port. The portal host reaches the node via the /rnode proxy
+# (already allowed by the rich rule above).
+# ---------------------------------------------------------------------------
+# xfdesktop and xfce4-notifyd are part of xfce4-session's core
+# component set: if a component is missing, the session tears itself
+# down a few seconds after start (components lose their D-Bus names,
+# job dies with 143) — so the full set must be installed.
+- name: Install VNC desktop packages (TigerVNC server, Xfce4, websockify)
+  ansible.builtin.package:
+    name:
+      - tigervnc-server
+      - xfce4-session
+      - xfwm4
+      - xfce4-panel
+      - xfce4-terminal
+      - xfce4-settings
+      - xfdesktop
+      - xfce4-notifyd
+      - xfce4-pulseaudio-plugin
+      - xfce4-power-manager
+      - xfce4-screenshooter
+      - xfce4-screensaver
+      - thunar
+      - dbus-x11
+      - python3-websockify
+      - google-noto-sans-cjk-ttc-fonts
+    state: present
+  when: ood_desktop_app_enabled | default(true) | bool
+
+# The OOD vnc template invokes websockify via
+# ${WEBSOCKIFY_CMD:-/opt/websockify/run}; provide that entry point
+# backed by the EPEL python3-websockify CLI.
+- name: Create websockify entry point directory
+  ansible.builtin.file:
+    path: /opt/websockify
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: ood_desktop_app_enabled | default(true) | bool
+
+- name: Create websockify run wrapper (expected by the OOD vnc template)
+  ansible.builtin.copy:
+    dest: /opt/websockify/run
+    owner: root
+    group: root
+    mode: "0755"
+    content: |
+      #!/bin/sh
+      # websockify entry point expected by the OOD batch-connect vnc
+      # template (default ${WEBSOCKIFY_CMD:-/opt/websockify/run}).
+      exec /usr/bin/websockify "$@"
+  when: ood_desktop_app_enabled | default(true) | bool
+
+# The OOD vnc template (ood_core, written for TurboVNC) invokes
+# `vncserver -log <file> ...` and parses the display from a
+# "Desktop ..." line. TigerVNC's vncserver rejects `-log`, prints
+# "New '<host>:<N> (<user>)' desktop is <host>:<N>", and writes its
+# log to ~/.vnc/<host>:<N>.log. This shim (first in the job PATH at
+# /usr/local/bin) adapts TigerVNC to the template's expectations:
+#   * accepts and strips `-log <file>`
+#   * prints a TurboVNC-style "Desktop ..." line for the parser
+#   * symlinks <file> to the real VNC log so the template's
+#     `tail -f` (one-time password rotation) follows it
+#   * passes -list / -kill / -help through unchanged
+- name: Create vncserver shim (TigerVNC compatibility for the OOD vnc template)
+  ansible.builtin.copy:
+    dest: /usr/local/bin/vncserver
+    owner: root
+    group: root
+    mode: "0755"
+    content: |
+      #!/bin/bash
+      # vncserver — TurboVNC-compatible shim for the OOD batch-connect
+      # vnc template (ood_core) on TigerVNC systems.
+      REAL=/usr/bin/vncserver
+
+      # Management subcommands pass through unchanged
+      case "${1:-}" in
+        -list|-kill|-help|--help|-version|--version)
+          exec "$REAL" "$@"
+          ;;
+      esac
+
+      log_file=""
+      args=()
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          -log)
+            log_file="${2:-}"
+            shift 2
+            ;;
+          *)
+            args+=("$1")
+            shift
+            ;;
+        esac
+      done
+
+      out=$("$REAL" "${args[@]}" 2>&1)
+      rc=$?
+      printf '%s\n' "$out"
+
+      if [ $rc -eq 0 ]; then
+        # TurboVNC-style line for the template's display parser
+        # (awk -F':' '/^Desktop/{print $NF}')
+        display=$(printf '%s\n' "$out" | sed -n "s/^New '[^:]*:\([0-9][0-9]*\) .*/\1/p" | head -n1)
+        [ -n "$display" ] && printf "Desktop 'vnc' is at :%s\n" "$display"
+        # Point the template's log path at the real TigerVNC log
+        # (~/.vnc/<host>:<N>.log) so `tail -f` follows it.
+        if [ -n "$log_file" ]; then
+          real_log=$(printf '%s\n' "$out" | sed -n 's/^Log file is //p' | head -n1)
+          [ -n "$real_log" ] && ln -sf "$real_log" "$log_file"
+        fi
+      fi
+      exit $rc
+  when: ood_desktop_app_enabled | default(true) | bool
+
+# Repair distro services broken by the base image's python3 -> 3.11
+# alternative (firewalld ModuleNotFoundError; nvidia-persistenced
+# --user root drop-in crash-loop). Idempotent; no-ops once healthy.
+# Without this, firewalld dies on the next node reboot and the portal's
+# /node /rnode proxy connections stop being accepted.
+- name: Repair python3.11-broken distro services (compute node)
+  ansible.builtin.include_tasks: fix-python3-services.yml

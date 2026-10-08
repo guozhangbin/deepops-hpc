@@ -47,6 +47,25 @@ python3 scripts/validation/validate_slurm.py --json    # run on a cluster node
 The validator must report `"ok": true` with `gpu_job_ok: true`. See
 `skills/deploy-slurm-cluster/` for the full procedure and failure branches.
 
+### One-command full stack (Slurm + OOD portal + monitoring)
+
+`playbooks/slurm-cluster.yml` is the single entry point: after the Slurm
+stack it imports `ood-portal.yml` (gated by
+`slurm_enable_ood_portal`, default on; tag `ood`), so ONE command deploys
+Slurm, the Open OnDemand portal (portal + node runtimes), and the
+monitoring stack (`slurm_enable_monitoring`):
+
+```bash
+ansible-playbook -i config/inventory playbooks/slurm-cluster.yml -v
+# then validate both stacks:
+python3 scripts/validation/validate_slurm.py --json   # on a cluster node
+python3 scripts/validation/validate_ood.py --json     # on the portal host
+```
+
+Both validators must report `"ok": true`. A recap `failed=0` with
+`rescued=0`/`rescued=1` (OSC app git clones on flaky egress) is the
+expected converged state.
+
 ## Golden path: Kubernetes GPU cluster
 
 ```bash
@@ -57,6 +76,23 @@ python3 scripts/validation/validate_k8s.py --json --cuda-smoke
 
 The validator must report `"ok": true` with `cuda_smoke_ok: true`. See
 `skills/deploy-k8s-gpu-cluster/` for the full procedure and failure branches.
+
+## Golden path: Open OnDemand portal (UltraLAB HPC Cluster)
+
+```bash
+# inventory groups: ood-portal (portal host) + slurm-node (Batch Connect
+# app runtimes on the compute nodes). The playbook has TWO plays — limit
+# to BOTH groups, or the node-side play is silently skipped.
+# site config: config/group_vars/ood-portal.yml
+ansible-playbook -l ood-portal,slurm-node playbooks/ood-portal.yml
+python3 scripts/validation/validate_ood.py --json    # run on the portal host
+```
+
+The validator must report `"ok": true` with `login_ok: true`. The portal is
+the web UI (Apache + OnDemand + Batch Connect apps) for submitting GPU jobs
+to the Slurm cluster; the upstream role `osc.open_ondemand` (OSC/ood-ansible)
+is installed by `scripts/setup.sh` into `roles/galaxy/`. See
+`skills/deploy-ood-portal/` for the full procedure and failure branches.
 
 ## Rules for operating this repository
 

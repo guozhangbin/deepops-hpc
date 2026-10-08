@@ -1,0 +1,13 @@
+---
+name: AlphaFold 2
+category: Interactive Apps
+subcategory: Servers
+role: batch_connect
+description: |
+  Launch a Jupyter server for AlphaFold 2 work on a compute node of the
+  UltraLAB HPC cluster (Slurm). The session runs as a Slurm batch job and
+  can optionally allocate 1 GPU.
+
+  Modeled on CHPC's [alphafold_nim_app](https://github.com/chpc-uofu/ood-ge-apps-v4):
+  the AlphaFold 2 environment (pip/conda package or NIM container) must be
+  available on the compute node; the notebook runs against it.

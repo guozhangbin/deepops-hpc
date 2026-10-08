@@ -12,12 +12,17 @@ slurm_build_deps:
   - pam-devel
   - http-parser-devel
   - json-c-devel
+  # Required to build the cgroup/v2 plugin (dbus/dbus.h); without it the
+  # plugin is silently skipped and slurmd fails to start on cgroup v2 hosts.
+  - dbus-devel
   - perl-ExtUtils-MakeMaker
   - libatomic
 
 slurm_pmix_deps:
   - "@Development Tools"
-  - libev-devel
+  # NOTE: libev-devel is not shipped in EPEL 9 (and its only dependent,
+  # libev-libevent-devel, is uninstallable there), so it is omitted on
+  # RHEL 9. pmix uses libevent, which libevent-devel provides.
   - libevent-devel
   - zlib
   - zlib-devel

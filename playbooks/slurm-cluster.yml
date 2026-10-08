@@ -10,6 +10,54 @@
 - name: Set up passwordless sudo if needed
   import_playbook: bootstrap/bootstrap-sudo.yml
 
+- name: Fix broken Docker config on all nodes
+  hosts: all
+  gather_facts: false
+  become: true
+  tasks:
+    - name: check if docker is installed
+      command: which docker
+      register: docker_bin
+      changed_when: false
+      failed_when: false
+    - name: check if docker is running
+      command: docker info
+      register: docker_check
+      changed_when: false
+      failed_when: false
+      when: docker_bin.rc == 0
+    - name: check docker-options.conf existence
+      stat:
+        path: /etc/systemd/system/docker.service.d/docker-options.conf
+      register: docker_opts_conf
+    - name: remove backticks from docker-options.conf
+      replace:
+        path: /etc/systemd/system/docker.service.d/docker-options.conf
+        regexp: '`'
+        replace: ''
+      register: fix_backticks
+      when: docker_opts_conf.stat.exists
+    - name: remove broken daemon.json
+      file:
+        path: /etc/docker/daemon.json
+        state: absent
+      when:
+        - docker_bin.rc == 0
+        - docker_check.rc != 0
+    - name: reload systemd after fixing docker config
+      systemd:
+        daemon_reload: yes
+      when: fix_backticks is changed
+    - name: restart docker after fixing config
+      service:
+        name: docker
+        state: restarted
+      when:
+        - docker_bin.rc == 0
+        - docker_check.rc != 0 or fix_backticks is changed
+  tags:
+    - fix-docker
+
 - name: Disable cloud-init
   import_playbook: generic/disable-cloud-init.yml
   when: deepops_disable_cloud_init
@@ -153,3 +201,22 @@
   import_playbook: nvidia-software/nvidia-peer-memory.yml
   tags:
     - nvidia-peer-memory
+
+# ---------------------------------------------------------------------------
+# Open OnDemand web portal (UltraLAB)
+#
+# One command deploys the whole cluster: Slurm (above), the OOD portal
+# (this import — portal on ood-portal + Jupyter/app runtime on
+# slurm-node), and monitoring (slurm_enable_monitoring). The import is
+# the same ood-portal.yml playbook, so both entry points stay in sync.
+# Disable with slurm_enable_ood_portal: false in the group vars.
+#
+# Site config: config/group_vars/ood-portal.yml.
+# Success signal: python3 scripts/validation/validate_ood.py --json
+# reports "ok": true — not the playbook recap.
+# ---------------------------------------------------------------------------
+- name: Install and configure the Open OnDemand portal
+  import_playbook: ood-portal.yml
+  when: slurm_enable_ood_portal | default(true)
+  tags:
+    - ood

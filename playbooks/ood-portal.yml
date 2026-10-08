@@ -1,0 +1,40 @@
+---
+# Open OnDemand Portal Playbook — UltraLAB HPC Cluster
+#
+# Thin playbook in the style of NVIDIA/deepops 26.05
+# playbooks/slurm-cluster/open-ondemand.yml: all work lives in the
+# wrapper role roles/ood-wrapper (itself delegating the OOD install to
+# the upstream OSC role osc.open_ondemand, which scripts/setup.sh
+# installs from roles/requirements.yml into roles/galaxy/).
+#
+#   ansible-playbook playbooks/ood-portal.yml           # portal + nodes  (FULL deploy — use this)
+#   ansible-playbook -l slurm-node playbooks/ood-portal.yml   # nodes only
+#
+# WARNING: `-l ood-portal` (portal host only) is a PARTIAL deploy — the
+# second play (compute-node Jupyter runtime + node-side service repairs,
+# e.g. the nvidia-persistenced/firewalld python3.9 pin) is silently
+# skipped while the recap still shows success. Never use it as the
+# standard deploy command.
+#
+# OOD release: pinned to ondemand-4.2.4 (roles/ood-wrapper/defaults —
+# override with ondemand_package in config/group_vars/ood-portal.yml).
+#
+# Site configuration (branding, Slurm cluster, apps, login users) lives
+# in config/group_vars/ood-portal.yml.
+#
+# Success signal: python3 scripts/validation/validate_ood.py --json
+# reports "ok": true — not the playbook recap.
+
+- name: Install and configure the Open OnDemand portal
+  hosts: ood-portal
+  become: true
+  roles:
+    - role: ood-wrapper
+      ood_is_server: true
+
+- name: Prepare Slurm compute nodes for the OOD Batch Connect apps
+  hosts: slurm-node
+  become: true
+  roles:
+    - role: ood-wrapper
+      ood_is_client: true

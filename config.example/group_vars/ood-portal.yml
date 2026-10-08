@@ -1,0 +1,189 @@
+# TEMPLATE — copy to config/group_vars/ and edit for your site.
+#
+# Open OnDemand portal — UltraLAB HPC Cluster
+# Site configuration for playbooks/ood-portal.yml (role osc.open_ondemand).
+#
+# Upstream references:
+#   - Role:      https://github.com/OSC/ood-ansible (Galaxy: osc.open_ondemand)
+#   - Docs:      https://osc.github.io/ood-documentation/latest/
+#   - Apps list: https://github.com/OSC/openondemand.org (batch connect apps)
+#
+# Note: app repositories are cloned directly from github.com (verified
+# reachable from the cluster network, Sep 2026). The gh-proxy.com mirror was
+# tried first but rate-limits with intermittent 403s, so it is not used.
+# yum.osc.edu (OOD packages) is also reachable directly.
+#
+---
+
+# ---- Branding: portal/dashboard title --------------------------------------
+# ood_portal_title is also written into nginx_stage.yml by the playbook so
+# that app navbars display the cluster name.
+ood_portal_title: "UltraLAB HPC Cluster"
+pun_custom_env:
+  OOD_DASHBOARD_TITLE: "UltraLAB HPC Cluster"
+  OOD_BRAND_BG_COLOR: "#53565a"
+  OOD_BRAND_LINK_ACTIVE_BG_COLOR: "#fff"
+
+# ---- Apache vhost -----------------------------------------------------------
+servername: master
+httpd_port: 80
+
+# ---- Package ----------------------------------------------------------------
+# Pin the OOD release for reproducible deploys (repo holds 4.2.1 .. 4.2.4).
+ondemand_package: "ondemand-4.2.4"
+# SELinux is enforcing on the portal host; install OOD's SELinux policy.
+install_ondemand_selinux: true
+
+# ---- Slurm cluster as seen from the portal ----------------------------------
+# Cluster name matches `scontrol show config | grep ClusterName` (deepops).
+# `bin` is the directory holding srun/sbatch. The OOD Slurm adapter builds
+# the path as `bin + "/" + cmd`, so it must point at the bin dir itself
+# (/usr/local/bin on DeepOps Slurm, NOT the install prefix /usr/local).
+clusters:
+  deepops: |
+    ---
+    v2:
+      metadata:
+        title: "UltraLAB HPC Cluster"
+      login:
+        host: master
+      job:
+        adapter: slurm
+        bin: /usr/local/bin
+        partition: batch
+
+# ---- Dashboard: MOTD + pinned apps (written to /etc/ood/ondemand.d/*.yml) ----
+ood_ondemand_d_configs:
+  motd:
+    content:
+      motd: |
+        ## UltraLAB HPC Cluster
+
+        超级计算 · 无缝衔接 · 通过网络实现开放互动的高性能计算
+
+        - 通过 Jupyter 提交 GPU 作业 (Slurm)
+        - 通过 Desktop 启动 Web 桌面 (Xfce, VNC/noVNC)
+        - 共享目录: `/home` 与 `/sw` (NFS, master 导出)
+        - 登录节点 `master` (192.168.0.200), 计算节点 `gpu01` / `gpu02`
+      motd_format: markdown
+  pinned_apps:
+    content:
+      pinned_apps:
+        - "sys/jupyter"
+        - "sys/bc_desktop"
+      pinned_apps_menu_length: 5
+
+# ---- Batch Connect app catalog (basic apps, optional install) -----------------
+# Every entry below is installable; `enabled` toggles each app individually:
+#   enabled: true  → the role installs the app on the portal
+#                    (repo: git clone into /var/www/ood/apps/sys/<name>;
+#                     local: copy of apps/<local> from this repo)
+#   enabled: false → not installed, and any previously installed copy is
+#                    removed, so the menu only shows active apps.
+#
+# Fit on this cluster (read before enabling):
+#   * OSC bc_osc_* apps assume OSC's environment — environment modules
+#     (project/ondemand, auto_modules_app_*), OSC partitions/constraints —
+#     plus the underlying software on the compute nodes; most will not
+#     work here until those are present.
+#   * The local DeepOps apps (apps/ in this repo; VNC-session pattern after
+#     CHPC's chpc-uofu/ood-ge-apps-v4) launch licensed commercial software
+#     — they need that software installed and on PATH on the compute nodes.
+#   * The DeepOps Jupyter app (apps/jupyter) is installed by default and is
+#     replaced when the OSC `jupyter` entry below is enabled.
+#
+# To enable an app, set its `enabled: true` and rerun
+# `ansible-playbook playbooks/ood-portal.yml`.
+ood_apps_catalog:
+  # ---- OSC upstream (github.com/OSC) ----
+  ansys_workbench:
+    repo: "https://github.com/OSC/bc_osc_ansys_workbench.git"
+    enabled: true
+  jupyter_spark:
+    repo: "https://github.com/OSC/bc_osc_jupyter_spark.git"
+    enabled: true
+  matlab:
+    repo: "https://github.com/OSC/bc_osc_matlab.git"
+    enabled: true
+  comsol:
+    repo: "https://github.com/OSC/bc_osc_comsol.git"
+    enabled: true
+  classroom_jupyter:
+    repo: "https://github.com/OSC/bc_classroom_jupyter.git"
+    version: main
+    enabled: true
+  jupyter:
+    repo: "https://github.com/OSC/bc_osc_jupyter.git"
+    enabled: true   # enabling this REPLACES the local apps/jupyter app
+  codeserver:
+    repo: "https://github.com/OSC/bc_osc_codeserver.git"
+    enabled: true
+  vmd:
+    repo: "https://github.com/OSC/bc_osc_vmd.git"
+    enabled: true
+  schrodinger:
+    repo: "https://github.com/OSC/bc_osc_schrodinger.git"
+    version: main
+    enabled: true
+  rstudio_server:
+    repo: "https://github.com/OSC/bc_osc_rstudio_server.git"
+    enabled: true
+  pymol:
+    repo: "https://github.com/OSC/bc_osc_pymol.git"
+    version: main
+    enabled: true
+  ollama:
+    repo: "https://github.com/OSC/bc_osc_ollama.git"
+    version: main
+    enabled: true
+  mlflow:
+    repo: "https://github.com/OSC/bc_osc_mlflow.git"
+    enabled: true
+  tensorboard:
+    repo: "https://github.com/OSC/bc_osc_tensorboard.git"
+    enabled: true
+  paraview:
+    repo: "https://github.com/OSC/bc_osc_paraview.git"
+    enabled: true
+  abaqus:
+    repo: "https://github.com/OSC/bc_osc_abaqus.git"
+    enabled: true
+  classroom_rstudio:
+    repo: "https://github.com/OSC/bc_classroom_rstudio.git"
+    version: main
+    enabled: true
+  # ---- DeepOps local (apps/ in this repo) ----
+  ansysedt:
+    local: ansysedt
+    enabled: true
+  ansysfluent:
+    local: ansysfluent
+    enabled: true
+  lumerical:
+    local: lumerical
+    enabled: true
+  alphafold:
+    local: alphafold
+    enabled: true
+  cst_studio:
+    local: cst_studio
+    enabled: true
+  feko:
+    local: feko
+    enabled: true
+
+# The OOD package also ships a generic "Desktop" Batch Connect app
+# (bc_desktop). playbooks/ood-portal.yml pins it to the deepops cluster,
+# restricts it to Xfce, and installs the VNC runtime (TigerVNC + Xfce4 +
+# websockify) on the slurm-node hosts, so it works end-to-end (noVNC in
+# the browser, or a native VNC client). Set to false to stop patching and
+# provisioning it.
+ood_desktop_app_enabled: true
+
+# ---- Portal login users -------------------------------------------------------
+# OOD authenticates with Apache Basic auth against /etc/httpd/.htpasswd.
+# Each name MUST also exist as a local account on the portal host (the PUN
+# session and Slurm jobs run as that user).
+ood_portal_users:
+  - name: new
+    password: "123456"

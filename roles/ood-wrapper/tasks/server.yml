@@ -1,0 +1,661 @@
+---
+# Portal (server) side of the OOD deployment.
+#
+# The upstream OSC role (osc.open_ondemand, Galaxy — installed by
+# scripts/setup.sh into roles/galaxy/) installs Apache + OOD. The package
+# release is pinned by `ondemand_package` (default ondemand-4.2.4). The
+# tasks below layer DeepOps site configuration on top; their `notify`
+# handlers (Restart apache httpd, Update nginx stage) are provided by the
+# upstream role, which is included into this play via include_role.
+
+- name: Install httpd-tools (provides htpasswd for portal user management)
+  ansible.builtin.package:
+    name: httpd-tools
+    state: present
+
+# A working firewalld (default-deny zone) blocks the portal for every
+# external client unless 80/443 are opened. (While the firewalld daemon
+# was broken the firewall enforced nothing and the portal "just worked";
+# the moment it is repaired the ports must be present.) The Slurm
+# role's firewall.yml opens the same ports for the head node; this
+# keeps the portal playbook self-contained.
+- name: gather package facts (for the firewalld check)
+  ansible.builtin.package_facts:
+    manager: rpm
+
+- name: Allow portal HTTP(S) through the firewall
+  ansible.posix.firewalld:
+    port: "{{ item }}/tcp"
+    permanent: yes
+    state: enabled
+  with_items:
+    - "80"
+    - "443"
+  when:
+    - ansible_os_family == "RedHat"
+    - "'firewalld' in ansible_facts.packages"
+
+# Two apps claim /var/www/ood/apps/sys/jupyter: the local DeepOps app
+# (apps/jupyter, the default) and the OSC bc_osc_jupyter clone (catalog
+# entry `jupyter`, when enabled). Only one may occupy the directory, and
+# `git clone` needs an EMPTY dest. OSC clones ship a `packaging/`
+# directory; the local app does not — that marker distinguishes the
+# occupants. If the OSC clone is enabled and the local app currently sits
+# in the way, remove it before the upstream clone runs.
+- name: Stat existing jupyter app
+  ansible.builtin.stat:
+    path: /var/www/ood/apps/sys/jupyter
+  register: jupyter_app_pre
+
+- name: Stat OSC jupyter clone marker (packaging directory)
+  ansible.builtin.stat:
+    path: /var/www/ood/apps/sys/jupyter/packaging
+  register: jupyter_clone_pre
+
+- name: Remove local Jupyter app (OSC clone needs an empty clone dest)
+  ansible.builtin.file:
+    path: /var/www/ood/apps/sys/jupyter
+    state: absent
+  when:
+    - not (ood_jupyter_local_enabled | default(true) | bool)
+    - jupyter_app_pre.stat.exists
+    - not (jupyter_clone_pre.stat.exists | default(false))
+
+# Wrapped in block/rescue: the upstream role's "Install OOD apps" git task
+# talks to github.com, which is flaky on this network (intermittent
+# "HTTP/2 stream ... not closed cleanly" / "Connection timed out"). A
+# failed clone must not abort the rest of the play (local app install,
+# site config) — the catalog's other apps and the whole portal depend on
+# it converging. The failure is still visible (rescued=1 in the recap);
+# rerun the playbook once the network cooperates to finish the clones.
+# (Also mitigated on the node: `git config --global http.version
+# HTTP/1.1` avoids the HTTP/2 stream errors — set it if not present.)
+- name: Install Open OnDemand (upstream OSC role)
+  block:
+    - ansible.builtin.include_role:
+        name: osc.open_ondemand
+  rescue:
+    - name: Upstream role failed — report and continue with local config
+      ansible.builtin.debug:
+        msg: >-
+          osc.open_ondemand reported a failure (most often the
+          github.com app-clone task on a flaky network). Continuing with
+          the local app install and site configuration; rerun
+          `ansible-playbook playbooks/ood-portal.yml` to finish the
+          clones.
+
+# ---------------------------------------------------------------------------
+# Site configuration (layered on the upstream install)
+# ---------------------------------------------------------------------------
+
+- name: Set portal title in nginx_stage.yml (upstream template ships it commented out)
+  ansible.builtin.lineinfile:
+    path: "{{ ood_base_conf_dir }}/nginx_stage.yml"
+    regexp: "^#ondemand_title: null"
+    line: "ondemand_title: {{ ood_portal_title }}"
+  when: ood_portal_title is defined
+  notify: Update nginx stage
+
+# ---------------------------------------------------------------------------
+# MOTD (dashboard "Message of the Day" box)
+#
+# The dashboard's MotdFile does URI.parse(ENV['MOTD_PATH']); with no
+# MOTD_PATH set that raises and the PUN log gets, on EVERY dashboard
+# page load:
+#   WARN "Error opening MOTD at \nException: bad URI (is not URI?): nil"
+# Point it at a real file (plus a title) to silence the warning and show
+# the welcome box. pun_custom_env is re-templated by the upstream role
+# on every run, so the blockinfile re-asserts it (same pattern as the
+# title above).
+# ---------------------------------------------------------------------------
+- name: Ensure the MOTD directory exists
+  ansible.builtin.file:
+    path: /opt/ood/portal_frame
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: ood_portal_title is defined
+
+- name: Install the portal MOTD file
+  ansible.builtin.copy:
+    dest: /opt/ood/portal_frame/motd
+    owner: root
+    group: root
+    mode: "0644"
+    content: "{{ ood_portal_motd_content }}"
+  when: ood_portal_title is defined
+  notify: Update nginx stage
+
+# NB: lineinfile (not blockinfile) — a blockinfile `block: |` literal
+# strips the shared indentation, so its lines would land at column 1
+# and corrupt the pun_custom_env mapping (Psych::SyntaxError at
+# `nginx_stage app_clean`). lineinfile keeps the explicit 2-space
+# indent.
+- name: Set MOTD_PATH in the PUN environment
+  ansible.builtin.lineinfile:
+    path: "{{ ood_base_conf_dir }}/nginx_stage.yml"
+    regexp: "^\\s*MOTD_PATH: .*$"
+    line: "  MOTD_PATH: \"/opt/ood/portal_frame/motd\""
+    insertafter: "^pun_custom_env:"
+  when: ood_portal_title is defined
+  notify: Update nginx stage
+
+- name: Set MOTD_TITLE in the PUN environment
+  ansible.builtin.lineinfile:
+    path: "{{ ood_base_conf_dir }}/nginx_stage.yml"
+    regexp: "^\\s*MOTD_TITLE: .*$"
+    line: "  MOTD_TITLE: \"Cluster Information\""
+    insertafter: "^  MOTD_PATH: .*$"
+  when: ood_portal_title is defined
+  notify: Update nginx stage
+
+- name: Set MOTD_FORMAT in the PUN environment
+  ansible.builtin.lineinfile:
+    path: "{{ ood_base_conf_dir }}/nginx_stage.yml"
+    regexp: "^\\s*MOTD_FORMAT: .*$"
+    line: "  MOTD_FORMAT: \"{{ ood_portal_motd_format }}\""
+    insertafter: "^  MOTD_TITLE: .*$"
+  when: ood_portal_title is defined
+  notify: Update nginx stage
+
+# Remove stale blockinfile markers left by the earlier (broken) MOTD
+# task; a no-op once the file is clean.
+- name: Remove stale MOTD blockinfile markers
+  ansible.builtin.replace:
+    path: "{{ ood_base_conf_dir }}/nginx_stage.yml"
+    regexp: "# (BEGIN|END) ANSIBLE MANAGED: MOTD\n"
+  when: ood_portal_title is defined
+
+# Repair distro services broken by the base image's python3 -> 3.11
+# alternative (firewalld/tuned ModuleNotFoundError; nvidia-persistenced
+# --user root drop-in). Idempotent; no-ops once healthy.
+- name: Repair python3.11-broken distro services (portal host)
+  ansible.builtin.include_tasks: fix-python3-services.yml
+
+# htpasswd -b refuses to create the file; make sure it exists first
+# (an empty .htpasswd is a valid Apache Basic-auth file with no users)
+# NB: the Apache workers (user "apache" on RHEL) must be able to read
+# this file or Basic auth fails with AH01620 "Could not open password
+# file" (500 on every /pun request).
+- name: Ensure htpasswd file exists
+  ansible.builtin.file:
+    path: "{{ apache_etc_dir }}/.htpasswd"
+    state: touch
+    owner: root
+    group: "{{ 'apache' if ansible_facts['os_family'] | default('RedHat') == 'RedHat' else 'www-data' }}"
+    mode: "0640"
+  when:
+    - ood_portal_users is defined
+    - not ansible_check_mode
+
+- name: Check portal users in htpasswd
+  ansible.builtin.command:
+    argv:
+      - htpasswd
+      - "-vb"
+      - "{{ apache_etc_dir }}/.htpasswd"
+      - "{{ item.name }}"
+      - "{{ item.password }}"
+  loop: "{{ ood_portal_users | default([]) }}"
+  loop_control:
+    index_var: htpasswd_idx
+  register: htpasswd_check
+  failed_when: false
+  changed_when: false
+  no_log: true
+  when:
+    - ood_portal_users is defined
+    - not ansible_check_mode
+
+- name: Add portal users to htpasswd
+  ansible.builtin.command:
+    argv:
+      - htpasswd
+      - "-b"
+      - "{{ apache_etc_dir }}/.htpasswd"
+      - "{{ item.name }}"
+      - "{{ item.password }}"
+  loop: "{{ ood_portal_users | default([]) }}"
+  loop_control:
+    index_var: htpasswd_idx
+  when:
+    - not ansible_check_mode
+    - ood_portal_users is defined
+    - htpasswd_check.results[htpasswd_idx].rc != 0
+  no_log: true
+  notify: Restart apache httpd
+
+# ---------------------------------------------------------------------------
+# Batch Connect node proxy (mod_ood_proxy)
+#
+# The ondemand Apache template ships without the /node and /rnode
+# LocationMatch blocks, so the dashboard's "Connect" button (which
+# proxies to the compute node running the job) would 404. Install the
+# standard proxy configuration; the handler ships in the ondemand
+# package at /opt/ood/mod_ood_proxy/lib/node_proxy.lua.
+# ---------------------------------------------------------------------------
+- name: Install Batch Connect node proxy Apache config
+  ansible.builtin.copy:
+    src: ood-node-proxy.conf
+    # NB: apache_etc_dir (e.g. /etc/httpd) is NOT included by the main
+    # config — only conf.d/ is. Put the file in apache_conf_dir.
+    dest: "{{ apache_conf_dir }}/ood-node-proxy.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart apache httpd
+
+- name: Validate Apache configuration
+  ansible.builtin.command: httpd -t
+  register: httpd_test
+  changed_when: false
+  failed_when: httpd_test.rc != 0
+
+# ---------------------------------------------------------------------------
+# Batch Connect app catalog
+#
+# The catalog (config/group_vars/ood-portal.yml: ood_apps_catalog) lists
+# the "basic" apps with an `enabled` toggle (optional install):
+#   enabled + repo:  cloned by the upstream OSC role above (ood_install_apps)
+#   enabled + local: copied from apps/<local> of this repo (below)
+#   disabled:        removed, so the menu only shows active apps
+#
+# Fit on this cluster: the OSC bc_osc_* apps assume OSC's environment
+# (modules, partitions) plus the underlying software on the nodes, so most
+# will not work here until those exist; the local DeepOps apps (VNC-session
+# pattern after CHPC's ood-ge-apps-v4) launch licensed software and need it
+# installed on the compute nodes.
+# ---------------------------------------------------------------------------
+# NB: mode 0755 (like the OSC app repos ship their files) — the batch
+# connect template EXECs the rendered script.sh, so the template
+# scripts must be executable. Without an explicit mode, the copy module
+# preserves whatever the pre-existing files have (a 644 install never
+# self-heals).
+- name: Install local catalog apps (apps/ of this repo)
+  ansible.builtin.copy:
+    src: "{{ ood_apps_src_dir }}/{{ item.value.local }}/"
+    dest: "/var/www/ood/apps/sys/{{ item.key }}/"
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ ood_apps_local | default({}) | dict2items }}"
+
+# The `jupyter` catalog entry is handled by the tasks below (local app vs
+# OSC clone), so exclude it here.
+- name: Remove disabled catalog apps (menu hygiene)
+  ansible.builtin.file:
+    path: "/var/www/ood/apps/sys/{{ item }}"
+    state: absent
+  loop: "{{ (ood_apps_catalog | default({})).keys() | list }}"
+  when:
+    - item not in (ood_apps_active | default({}))
+    - item != 'jupyter'
+
+# Default Jupyter: the local DeepOps app (apps/jupyter) — plain Slurm +
+# pip-installed Jupyter runtime (client mode of this role). The OSC
+# bc_osc_jupyter clone (needs OSC-specific modules) replaces it when its
+# catalog entry is enabled. Switching back to the local app removes the
+# clone first so the local app is not mixed with leftover clone files.
+- name: Remove OSC jupyter clone (switching back to the local app)
+  ansible.builtin.file:
+    path: /var/www/ood/apps/sys/jupyter
+    state: absent
+  when:
+    - ood_jupyter_local_enabled | default(true) | bool
+    - jupyter_clone_pre.stat.exists | default(false)
+
+# mode 0755: the template EXECs the rendered script.sh, so the template
+# scripts must be executable (see the local-catalog-apps task above).
+- name: Install DeepOps Jupyter app (default Jupyter)
+  ansible.builtin.copy:
+    src: "{{ ood_jupyter_app_src }}/"
+    dest: /var/www/ood/apps/sys/jupyter/
+    owner: root
+    group: root
+    mode: "0755"
+  when: ood_jupyter_local_enabled | default(true) | bool
+
+# ---------------------------------------------------------------------------
+# OSC Jupyter app (catalog `jupyter` enabled) — adapt it to this cluster
+#
+# The upstream clone targets OSC's clusters (ascend/cardinal/pitzer), so
+# the form renders "This app requires clusters that do not exist or you
+# do not have access to"; its scripts call `module load
+# project/ondemand` (absent here) and its before.sh configures Jupyter
+# via c.NotebookApp.* options, which JupyterLab 4 ignores (the server
+# then never binds the session port and the job times out).
+#
+# Pin the cluster and replace the submit + before + script templates
+# with DeepOps-adapted versions (the proven apps/jupyter pattern, using
+# this app's form field names: mode, working_dir, global_gpus,
+# global_num_cores, global_enable_mem, global_mem, bc_num_hours). The
+# OSC after.sh references an unset `${host}` and would kill a healthy
+# job, so it is removed. The OSC role re-clones the app on every run,
+# so these patches re-apply on every playbook run (bc_desktop pattern).
+# ---------------------------------------------------------------------------
+- name: Stat the OSC Jupyter app (clone present?)
+  ansible.builtin.stat:
+    path: /var/www/ood/apps/sys/jupyter/form.yml
+  register: jupyter_osc_form
+  when: not (ood_jupyter_local_enabled | default(true) | bool)
+
+# NB: the replacement string must END WITH \n — the regexp consumes the
+# newline after the last cluster entry, and without it the next key
+# (form:) glues onto the list item and the YAML no longer parses
+# (Psych::SyntaxError on every form render).
+- name: Pin the OSC Jupyter app to the deepops cluster
+  ansible.builtin.replace:
+    path: /var/www/ood/apps/sys/jupyter/form.yml
+    regexp: "^cluster:\n(?:[ \t]+- [^\n]+\n)+"
+    replace: "cluster:\n  - \"deepops\"\n"
+  when:
+    - not (ood_jupyter_local_enabled | default(true) | bool)
+    - jupyter_osc_form.stat.exists | default(false)
+
+- name: Install DeepOps before.sh.erb for the OSC Jupyter app
+  ansible.builtin.copy:
+    dest: /var/www/ood/apps/sys/jupyter/template/before.sh.erb
+    owner: root
+    group: root
+    mode: "0755"
+    content: |
+      <%# Sourced by the generated job script BEFORE the main script starts.
+          (DeepOps adaptation of the OSC bc_osc_jupyter app.) -%>
+      <%# App root path (lab vs tree) recorded in connection.yml; the
+          session panel's Connect button builds /rnode/<host>/<port>/<api> -%>
+      <% if context.mode == "0" -%>
+      export jupyter_api="tree"
+      <% else -%>
+      export jupyter_api="lab"
+      <% end -%>
+
+      # Find a free TCP port for the Jupyter server (helper provided by
+      # the OOD basic template)
+      port=$(find_port localhost 2000 65535)
+      if [[ -z "${port}" ]]; then
+        echo "ERROR: failed to find a free TCP port" >&2
+        exit 1
+      fi
+      echo "Jupyter will listen on port ${port}"
+  when:
+    - not (ood_jupyter_local_enabled | default(true) | bool)
+    - jupyter_osc_form.stat.exists | default(false)
+
+- name: Install DeepOps script.sh.erb for the OSC Jupyter app
+  ansible.builtin.copy:
+    dest: /var/www/ood/apps/sys/jupyter/template/script.sh.erb
+    owner: root
+    group: root
+    mode: "0755"
+    content: |
+      #!/usr/bin/env bash
+      <%# Main script of the Jupyter app (runs inside the Slurm job).
+          DeepOps adaptation: no OSC modules — the system pip Jupyter
+          (Lab 4) is launched with CLI options (Lab 4 ignores the
+          c.NotebookApp.* config the upstream before.sh wrote).
+          $port is set by before.sh; CUDA_VISIBLE_DEVICES is set by
+          Slurm when a GPU was allocated. -%>
+      set -euo pipefail
+
+      echo "Starting Jupyter on $(hostname) (port ${port:-?})"
+
+      # GPUs are hidden from ordinary SSH sessions on cluster nodes;
+      # inside a Slurm job they are visible. Show the allocation when
+      # one was requested.
+      if [[ -n "${CUDA_VISIBLE_DEVICES:-}" ]]; then
+        nvidia-smi || true
+      fi
+
+      # Run from the user's home directory (shared NFS) so
+      # notebooks/files persist across sessions.
+      cd "${HOME}"
+
+      JUPYTER_ARGS=(
+        --ip=0.0.0.0
+        --port="${port}"
+        --no-browser
+        --allow-root
+        --ServerApp.token=''
+      )
+
+      <% if context.mode == "0" %>
+      exec jupyter notebook "${JUPYTER_ARGS[@]}"
+      <% else %>
+      exec jupyter lab "${JUPYTER_ARGS[@]}"
+      <% end %>
+  when:
+    - not (ood_jupyter_local_enabled | default(true) | bool)
+    - jupyter_osc_form.stat.exists | default(false)
+
+- name: Remove the OSC Jupyter app after.sh.erb (references an unset ${host})
+  ansible.builtin.file:
+    path: /var/www/ood/apps/sys/jupyter/template/after.sh.erb
+    state: absent
+  when:
+    - not (ood_jupyter_local_enabled | default(true) | bool)
+    - jupyter_osc_form.stat.exists | default(false)
+
+- name: Install DeepOps submit.yml.erb for the OSC Jupyter app
+  ansible.builtin.copy:
+    dest: /var/www/ood/apps/sys/jupyter/submit.yml.erb
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Slurm batch options for the Jupyter app (OSC app, DeepOps
+      # adaptation). NB: rendered with a binding over the session
+      # context, so form values are bare variables (global_gpus,
+      # global_num_cores, ...). The cluster has a single "batch"
+      # partition; GPUs are requested via gpus_per_node (slurm
+      # adapter: --gpus-per-node).
+      <% gpus_n = (global_gpus.to_s).to_i -%>
+      <% cores_n = (global_num_cores.to_s).to_i -%>
+      <% hours_n = (bc_num_hours.to_s).to_i -%>
+      <% mem_n = (global_mem.to_s).to_i -%>
+      ---
+      batch_connect:
+        template: "basic"
+        conn_params:
+          - jupyter_api
+      script:
+        job_name: jupyter
+        queue_name: batch
+      <% if gpus_n > 0 %>
+        gpus_per_node: <%= gpus_n %>
+      <% end %>
+        native:
+          - "--time"
+          - "<%= format('%02d:%02d:%02d', (hours_n > 0 ? hours_n : 4), 0, 0) %>"
+      <% if cores_n > 0 %>
+          - "--ntasks-per-node"
+          - "<%= cores_n %>"
+      <% end %>
+      <% if global_enable_mem.to_s == "1" && mem_n > 0 %>
+          - "--mem"
+          - "<%= mem_n %>G"
+      <% end %>
+  when:
+    - not (ood_jupyter_local_enabled | default(true) | bool)
+    - jupyter_osc_form.stat.exists | default(false)
+
+# ---------------------------------------------------------------------------
+# Desktop app (bc_desktop — ships inside the ondemand rpm)
+#
+# The packaged app has no cluster pinned (submission fails with
+# "The cluster was never set") and offers desktop environments this
+# cluster does not install (only Xfce is installed on the compute
+# nodes). Patch form.yml idempotently; an ondemand package upgrade
+# resets the file, so the patch is re-applied on every run.
+# ---------------------------------------------------------------------------
+- name: Pin the Desktop app to the deepops cluster
+  ansible.builtin.blockinfile:
+    path: /var/www/ood/apps/sys/bc_desktop/form.yml
+    marker: "# {mark} ANSIBLE MANAGED: deepops cluster pin"
+    insertafter: "^---"
+    block: |
+      cluster:
+        - "deepops"
+  when: ood_desktop_app_enabled | default(true) | bool
+
+- name: Offer only the Xfce desktop (the one installed on the compute nodes)
+  ansible.builtin.replace:
+    path: /var/www/ood/apps/sys/bc_desktop/form.yml
+    regexp: "    options:\n(?:      - \"[a-zA-Z]+\"\n)+"
+    replace: "    options:\n      - \"xfce\"\n"
+  when: ood_desktop_app_enabled | default(true) | bool
+
+- name: Default the Desktop app to Xfce
+  ansible.builtin.lineinfile:
+    path: /var/www/ood/apps/sys/bc_desktop/form.yml
+    line: "    default: xfce"
+    insertafter: "widget: select"
+    firstmatch: true
+  when: ood_desktop_app_enabled | default(true) | bool
+
+# Full teardown of the desktop session.
+#
+# The template's own clean_up only kills the direct children of the job
+# script (`pkill -P $SCRIPT_PID`); the desktop components are children
+# of xfce4-session, so without this they survive as orphans still
+# holding their D-Bus names (org.xfce.Panel, org.xfce.FileManager,
+# org.xfdesktop.Notify, ...). The next desktop session on the same
+# node then fails to register those names and tears itself down
+# ("Name ... lost on the message dbus", job exits 143) — which is what
+# killed the earlier sessions. The app's template/ directory is staged
+# into every session directory, so this file is present and sourced by
+# the template's clean_up on the compute node.
+- name: Install full desktop teardown script for the Desktop app
+  ansible.builtin.copy:
+    dest: /var/www/ood/apps/sys/bc_desktop/template/clean.sh
+    owner: root
+    group: root
+    mode: "0755"
+    content: |
+      #!/usr/bin/env bash
+      # Full teardown of the VNC desktop session (sourced by the OOD
+      # vnc template's clean_up).
+      #
+      # The template's clean_up only kills the direct children of the
+      # job script. The desktop components are children of
+      # xfce4-session, so without this they survive as orphans still
+      # holding their D-Bus names (org.xfce.Panel, org.xfce.FileManager,
+      # org.xfdesktop.Notify, ...). The next desktop session on this
+      # node then fails to register those names and tears itself down
+      # ("Name ... lost on the message dbus"; the job exits 143).
+      #
+      # NB: kills every desktop on this node; a node is expected to
+      # host at most one desktop session at a time on this cluster.
+
+      # Kill each xfce4-session together with its whole subtree
+      # (xfwm4, xfce4-panel, Thunar, xfce4-notifyd, ...)
+      kill_tree() {
+        local pid child
+        for child in $(pgrep -P "$1" 2>/dev/null); do
+          kill_tree "$child"
+        done
+        kill -9 "$1" 2>/dev/null || true
+      }
+      for sess in $(pgrep -x xfce4-session 2>/dev/null); do
+        kill_tree "$sess"
+      done
+
+      # Stray components (in case xfce4-session is already gone)
+      for proc in xfwm4 xfce4-panel xfdesktop Thunar xfsettingsd \
+                  xfce4-notifyd xfce4-screensaver xfconfd \
+                  xfce4-power-manager tumblerd; do
+        pkill -9 -x "$proc" 2>/dev/null || true
+      done
+
+      # Auxiliary daemons the session spawns (match the full command
+      # path to avoid collateral)
+      pkill -9 -f "^/usr/libexec/tracker" 2>/dev/null || true
+      pkill -9 -f "^/usr/libexec/gvfs" 2>/dev/null || true
+      pkill -9 -f "^/usr/libexec/at-spi" 2>/dev/null || true
+      pkill -9 -f "^/usr/libexec/geoclue" 2>/dev/null || true
+
+      # Reclaim stale VNC sessions whose Xvnc process is already dead
+      # (TigerVNC `vncserver -list` prints "  :N  PID  PID", which the
+      # template's stock cleaner does not match). Live sessions — e.g.
+      # another user's desktop — are left alone.
+      vncserver -list 2>/dev/null | \
+        awk '$1 ~ /^:/ { system("kill -0 " $2 " 2>/dev/null || vncserver -kill " $1) }'
+
+      exit 0
+  when: ood_desktop_app_enabled | default(true) | bool
+
+# The template's stock vnc_clean (awk '/^:/' over `vncserver -list`)
+# never matches TigerVNC's indented output, so stale VNC sessions from
+# crashed jobs are never reclaimed and displays accumulate. Override
+# the context with a TigerVNC-compatible cleaner (same semantics as
+# stock: only sessions whose Xvnc process is dead are removed).
+# Defense in depth: clean.sh above does the same at teardown.
+- name: Override vnc_clean for TigerVNC in the Desktop app submit config
+  ansible.builtin.copy:
+    dest: /var/www/ood/apps/sys/bc_desktop/submit.yml.erb
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      ---
+      batch_connect:
+        template: vnc
+        vnc_clean: >-
+          vncserver -list 2>/dev/null |
+          awk '$1 ~ /^:/ { system("kill -0 " $2 " 2>/dev/null || vncserver -kill " $1) }'
+  when: ood_desktop_app_enabled | default(true) | bool
+
+# ---------------------------------------------------------------------------
+# Pre-stage sys apps into each portal user's PUN (per-user nginx)
+#
+# nginx_stage only stages an app into the PUN when the request arrives
+# through the Apache lua proxy (which passes sub-uri "/pun"). When the
+# portal was unreachable — e.g. the ood-portal-generator
+# canonicalization 301 to the unresolvable "master" hostname — no app
+# request ever got through, the apps were never staged, and the PUN
+# nginx answered 404 for every app URL while the dashboard (a direct
+# Passenger app) kept working.
+#
+# Stage every sys app explicitly (idempotent: skips apps that already
+# have a staged conf) so the app menu works from the first login.
+# NB: the request URI needs the leading slash (-r /sys/<name>) and the
+# sub-uri (-i /pun) must match the portal's pun_uri, or the generated
+# location block does not match the incoming request (silent 404).
+# ---------------------------------------------------------------------------
+- name: Pre-stage sys apps in the per-user NGINX (PUN)
+  ansible.builtin.shell: |
+    set -uo pipefail
+    ns=/opt/ood/nginx_stage/sbin/nginx_stage
+    staged=()
+    for d in /var/www/ood/apps/sys/*/; do
+      name=$(basename "$d")
+      if [[ -f "/var/lib/ondemand-nginx/config/apps/sys/${name}.conf" ]]; then
+        continue
+      fi
+      "$ns" app -u "{{ item.name }}" -r "/sys/$name" -i /pun >/dev/null 2>&1 || true
+      staged+=("$name")
+    done
+    echo "${staged[*]:-none}"
+  args:
+    executable: /bin/bash
+  loop: "{{ ood_portal_users | default([]) }}"
+  loop_control:
+    index_var: stage_idx
+  register: pun_prestage
+  changed_when: pun_prestage.stdout != "none"
+  failed_when: false
+  when: not ansible_check_mode
+
+- name: Restart per-user NGINX (PUN) instances to pick up the app change
+  ansible.builtin.shell: |
+    set -o pipefail
+    if [[ -f "/var/run/ondemand-nginx/{{ item.name }}/passenger.pid" ]]; then
+      kill "$(cat "/var/run/ondemand-nginx/{{ item.name }}/passenger.pid")"
+    fi
+  loop: "{{ ood_portal_users | default([]) }}"
+  loop_control:
+    index_var: pun_idx
+  register: pun_stop
+  changed_when: pun_stop.rc == 0
+  failed_when: false
+  when: not ansible_check_mode

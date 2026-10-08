@@ -1,0 +1,102 @@
+---
+# Slurm 26.x quirk (verified on this cluster, see README.zh-CN §7.1): a node
+# that reboots outside Slurm's control lands in State=DOWN with
+# Reason="Node unexpectedly rebooted", and
+#   scontrol update NodeName=X NodeState=RESUME|IDLE
+# is REJECTED by this version (ReturnToService=1 does not clear it either).
+# The only working recovery is to reset the controller's state directory
+# and restart slurmctld (nodes then re-register as idle). This task makes
+# that recovery automatic: it runs on every controller-side playbook pass,
+# is a no-op when all nodes are up, and only acts when (a) at least one
+# node is DOWN and (b) no jobs are running (a state reset would otherwise
+# drop in-flight job state).
+- name: List nodes currently DOWN
+  ansible.builtin.shell: |
+    set -o pipefail
+    sinfo -o "%t %n" -n -r 2>/dev/null | awk '$1 ~ /down/ {print $2}' | sort -u
+  args:
+    executable: /bin/bash
+  register: slurm_down_nodes
+  failed_when: false
+  changed_when: false
+
+- name: Count jobs currently in the queue (running or pending)
+  ansible.builtin.shell: |
+    squeue --noheader 2>/dev/null | wc -l
+  args:
+    executable: /bin/bash
+  register: slurm_queue_count
+  failed_when: false
+  changed_when: false
+
+- name: Auto-recover nodes stuck DOWN (unexpected-reboot state)
+  when:
+    - slurm_down_nodes.stdout | default('') | length > 0
+    - slurm_queue_count.stdout | default('0') | trim | int == 0
+  block:
+    - name: Announce automatic recovery
+      ansible.builtin.debug:
+        msg: >-
+          Node(s) {{ slurm_down_nodes.stdout | trim }} are DOWN
+          (unexpected-reboot state) and the queue is empty —
+          resetting slurmctld state and restarting Slurm services.
+
+    - name: Stop slurmctld
+      ansible.builtin.systemd:
+        name: slurmctld
+        state: stopped
+
+    - name: Archive and reset the controller state directory
+      ansible.builtin.shell: |
+        set -euo pipefail
+        if [ -d /var/spool/slurm/ctld ]; then
+          mv /var/spool/slurm/ctld "/var/spool/slurm/ctld.bak.$(date +%s)"
+        fi
+        # keep only the latest state backup
+        ls -1dt /var/spool/slurm/ctld.bak.* 2>/dev/null | tail -n +2 | xargs -r rm -rf
+        mkdir -p /var/spool/slurm/ctld
+        chown slurm:slurm /var/spool/slurm/ctld
+        chmod 700 /var/spool/slurm/ctld
+      args:
+        executable: /bin/bash
+
+    - name: Start slurmctld
+      ansible.builtin.systemd:
+        name: slurmctld
+        state: started
+        enabled: true
+
+    - name: Restart slurmd on compute nodes to force re-registration
+      ansible.builtin.systemd:
+        name: slurmd
+        state: restarted
+        enabled: true
+      delegate_to: "{{ item }}"
+      loop: "{{ (groups['slurm-node'] | default([])) | list }}"
+
+    - name: Wait for nodes to return to service
+      ansible.builtin.shell: |
+        set -euo pipefail
+        for i in $(seq 1 30); do
+          down=$(sinfo -o "%t" -n -r 2>/dev/null | awk '$1 ~ /down/' | wc -l)
+          [ "$down" -eq 0 ] && exit 0
+          sleep 5
+        done
+        echo "warning: nodes still down after 150s" >&2
+        exit 1
+      args:
+        executable: /bin/bash
+      register: slurm_recovery_wait
+      until: slurm_recovery_wait.rc == 0
+      retries: 1
+
+- name: Report node recovery status
+  ansible.builtin.debug:
+    msg: >-
+      DOWN node(s) detected: {{ slurm_down_nodes.stdout | trim }} —
+      NOT auto-recovering because jobs are still in the queue
+      ({{ slurm_queue_count.stdout | trim }}). Re-run this playbook when
+      the queue is empty, or recover manually (README.zh-CN §7.1).
+  when:
+    - slurm_down_nodes.stdout | default('') | length > 0
+    - slurm_queue_count.stdout | default('0') | trim | int > 0

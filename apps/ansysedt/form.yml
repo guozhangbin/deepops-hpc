@@ -1,0 +1,33 @@
+---
+cluster:
+  - "deepops"
+form:
+  - nodes
+  - cores
+  - gpus
+  - walltime
+  - command
+attributes:
+  nodes:
+    label: "Nodes"
+    widget: "text_field"
+    value: "1"
+  cores:
+    label: "Cores per node"
+    widget: "text_field"
+    value: "4"
+  gpus:
+    label: "GPUs"
+    widget: "text_field"
+    default: 0
+    help: "Number of GPUs to allocate (0 for CPU-only)"
+  walltime:
+    label: "Max run time (HH:MM:SS)"
+    widget: "text_field"
+    value: "08:00:00"
+    help: "Job walltime limit; the session is killed when it elapses"
+  command:
+    label: "Launch command"
+    widget: "text_field"
+    value: "ansysedt"
+    help: "Command executed inside the VNC session; must be on PATH on the compute node (override if the launcher binary has a different name)"

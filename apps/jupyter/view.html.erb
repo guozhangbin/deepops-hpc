@@ -1,0 +1,10 @@
+<%# Connection view shown in the session panel while the job runs.
+    Rendered with the binding of the connection info (host, port, password,
+    and any conn_params such as jupyter_api).
+    The /rnode/<host>/<port> path is reverse-proxied by Apache (mod_ood_proxy)
+    to the compute node running the job. -%>
+<%- base_url = "/rnode/#{host}/#{port}" -%>
+
+<a href="<%= base_url %>/<%= jupyter_api %>" class="btn btn-primary" target="_blank">
+  <i class="fa fa-cogs"></i> Connect to Jupyter
+</a>

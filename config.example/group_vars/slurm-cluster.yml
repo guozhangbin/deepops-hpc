@@ -211,6 +211,14 @@ slurm_enable_monitoring: true
 slurm_monitoring_group: "slurm-master"
 
 ################################################################################
+# Open OnDemand web portal (UltraLAB)                                        #
+################################################################################
+slurm_enable_ood_portal: true
+
+# Portal site config (users, apps, branding) lives in
+# config/group_vars/ood-portal.yml
+
+################################################################################
 # Logging with rsyslog                                                         #
 ################################################################################
 slurm_enable_rsyslog_server: true

@@ -1,0 +1,35 @@
+# Slurm batch options for the Altair Feko app.
+# Rendered by the OOD dashboard with a binding over the session context, so
+# form values are bare variables (e.g. "nodes"). Files under template/ are
+# rendered with a TemplateBinding and must use context.<attr>.
+# NB: do NOT wrap prose in an ERB comment block here: an ERB comment ends at
+#     the FIRST closing tag, so any tag sequence inside it terminates the
+#     comment early and the leftover text leaks into the YAML document.
+---
+batch_connect:
+  template: vnc
+  # NB: single word — the vnc template injects `-name <name>` UNQUOTED
+  # into the Xvnc command line; a multi-word value breaks it
+  # ("Unrecognized option: <2nd word>"). Menu title is in manifest.yml.
+  name: "feko"
+  geometry: "1920x1080"
+  # TigerVNC-compatible stale-session cleaner (the template's stock cleaner
+  # never matches TigerVNC's indented `vncserver -list` output).
+  vnc_clean: >-
+    vncserver -list 2>/dev/null |
+    awk '$1 ~ /^:/ { system("kill -0 " $2 " 2>/dev/null || vncserver -kill " $1) }'
+<% gpus_n = (gpus.to_s).to_i -%>
+script:
+  job_name: feko
+  queue_name: batch
+  native:
+    - "--time"
+    - "<%= walltime %>"
+    - "-N"
+    - "<%= nodes %>"
+    - "--ntasks-per-node"
+    - "<%= cores %>"
+<% if gpus_n > 0 %>
+    - "--gpus-per-node"
+    - "<%= gpus_n %>"
+<% end %>
