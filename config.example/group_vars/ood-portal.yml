@@ -101,7 +101,7 @@ ood_apps_catalog:
     enabled: false
   jupyter_spark:
     repo: "https://github.com/OSC/bc_osc_jupyter_spark.git"
-    enabled: false
+    enabled: true
   matlab:
     repo: "https://github.com/OSC/bc_osc_matlab.git"
     enabled: false
@@ -117,34 +117,34 @@ ood_apps_catalog:
     enabled: true   # enabling this REPLACES the local apps/jupyter app
   codeserver:
     repo: "https://github.com/OSC/bc_osc_codeserver.git"
-    enabled: false
+    enabled: true
   vmd:
     repo: "https://github.com/OSC/bc_osc_vmd.git"
-    enabled: false
+    enabled: true
   schrodinger:
     repo: "https://github.com/OSC/bc_osc_schrodinger.git"
     version: main
     enabled: false
   rstudio_server:
     repo: "https://github.com/OSC/bc_osc_rstudio_server.git"
-    enabled: false
+    enabled: true
   pymol:
     repo: "https://github.com/OSC/bc_osc_pymol.git"
     version: main
-    enabled: false
+    enabled: true
   ollama:
     repo: "https://github.com/OSC/bc_osc_ollama.git"
     version: main
-    enabled: false
+    enabled: true
   mlflow:
     repo: "https://github.com/OSC/bc_osc_mlflow.git"
-    enabled: false
+    enabled: true
   tensorboard:
     repo: "https://github.com/OSC/bc_osc_tensorboard.git"
-    enabled: false
+    enabled: true
   paraview:
     repo: "https://github.com/OSC/bc_osc_paraview.git"
-    enabled: false
+    enabled: true
   abaqus:
     repo: "https://github.com/OSC/bc_osc_abaqus.git"
     enabled: false
