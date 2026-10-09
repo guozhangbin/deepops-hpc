@@ -634,6 +634,37 @@
   when: ood_desktop_app_enabled | default(true) | bool
 
 # ---------------------------------------------------------------------------
+# Shell app (web terminal): allow the cluster hosts
+#
+# The Shell app validates each requested host against an allowlist built
+# from (a) the `login.host` of each cluster config and (b)
+# OOD_SSHHOST_ALLOWLIST in its env file
+# (/etc/ood/config/apps/shell/env, NODE_ENV=production). The cluster config
+# only lists the login node, so without the allowlist the web terminal
+# refuses the compute nodes ("Host \"gpu01\" not specified in allowlist or
+# cluster configs."). The node side is covered by slurm_allow_ssh_user
+# (Slurm role), which puts the portal users into /etc/localusers so
+# pam_slurm_adopt lets them SSH without an active job.
+# ---------------------------------------------------------------------------
+- name: Ensure the Shell app config directory exists
+  ansible.builtin.file:
+    path: /etc/ood/config/apps/shell
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Allow the cluster hosts in the Shell app (web terminal) allowlist
+  ansible.builtin.copy:
+    dest: /etc/ood/config/apps/shell/env
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      OOD_SSHHOST_ALLOWLIST={{ (groups['ood-portal'] | default([]) + groups['slurm-node'] | default([])) | unique | join(':') }}
+      OOD_SHELL_TERM=xterm-256color
+
+# ---------------------------------------------------------------------------
 # Pre-stage sys apps into each portal user's PUN (per-user nginx)
 #
 # nginx_stage only stages an app into the PUN when the request arrives
