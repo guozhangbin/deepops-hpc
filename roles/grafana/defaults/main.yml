@@ -10,3 +10,6 @@ grafana_enabled: yes
 grafana_cfg_user: admin
 grafana_cfg_pass: deepops
 grafana_cfg_dashboard_path: "{{ grafana_data_dir }}/dashboards"
+# Default UI language (IETF language tag). zh-Hans = Simplified Chinese.
+# Users can still override this per-profile in the UI.
+grafana_default_language: zh-Hans

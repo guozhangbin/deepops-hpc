@@ -1,7 +1,7 @@
 ---
 name: AlphaFold 2
-category: Interactive Apps
-subcategory: Servers
+category: 交互式应用
+subcategory: 服务器
 role: batch_connect
 description: |
   Launch a Jupyter server for AlphaFold 2 work on a compute node of the

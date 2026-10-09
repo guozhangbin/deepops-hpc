@@ -665,6 +665,86 @@
       OOD_SHELL_TERM=xterm-256color
 
 # ---------------------------------------------------------------------------
+# Dashboard (portal) default UI language
+#
+# The dashboard reads its locale from ENV['OOD_LOCALE'] (see
+# config/configuration_singleton.rb: `def locale; (ENV['OOD_LOCALE'] ||
+# 'en').to_sym`), and in production it loads dotenv files from
+# /etc/ood/config/apps/dashboard (config_root + "env"). The dashboard ships
+# a full zh-CN locale (config/locales/zh-CN.yml), so pointing OOD_LOCALE at
+# it renders the portal UI in Simplified Chinese. A handful of strings are
+# missing from the upstream zh-CN translation and fall back to English.
+# ---------------------------------------------------------------------------
+- name: Ensure the Dashboard app config directory exists
+  ansible.builtin.file:
+    path: /etc/ood/config/apps/dashboard
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Set the Dashboard default UI language
+  ansible.builtin.copy:
+    dest: /etc/ood/config/apps/dashboard/env
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      OOD_LOCALE={{ ood_dashboard_locale | default('zh-CN') }}
+
+# ---------------------------------------------------------------------------
+# Portal navigation in zh-CN
+#
+# The dashboard's top-level menu groups and the in-menu category headers are
+# taken from each app's manifest `category` / `subcategory` (e.g. "Files",
+# "Jobs", "Clusters", "Interactive Apps", "Desktops", "Servers", "GUIs",
+# "Engineering", "Classrooms"). These are hardcoded strings, NOT i18n keys, so
+# a locale file cannot translate them — the values in the manifests must be
+# changed. The local catalog apps (apps/) carry the zh-CN values in-repo; the
+# OSC upstream apps (installed by osc.open_ondemand) do not, so we rewrite
+# their manifests here. The substitution is idempotent (it only rewrites the
+# known English values; once translated it is a no-op).
+#
+# Separately, a handful of dashboard i18n strings are missing from the
+# upstream zh-CN.yml and fall back to English; we install a supplemental
+# locale file (loaded after the bundled one) that fills them in.
+# ---------------------------------------------------------------------------
+- name: Ensure the OOD locales directory exists
+  ansible.builtin.file:
+    path: /etc/ood/config/locales
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install supplemental zh-CN dashboard translations
+  ansible.builtin.copy:
+    src: files/ood-locale-zh-CN.yml
+    dest: /etc/ood/config/locales/zh-CN.yml
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Translate the sys app nav categories/subcategories to zh-CN
+  ansible.builtin.shell: |
+    set -uo pipefail
+    for m in /var/www/ood/apps/sys/*/manifest.yml; do
+      [ -e "$m" ] || continue
+      sed -i \
+        -e 's|^\(category:[[:space:]]*\)Files[[:space:]]*$|\1文件|' \
+        -e 's|^\(category:[[:space:]]*\)Jobs[[:space:]]*$|\1作业|' \
+        -e 's|^\(category:[[:space:]]*\)Clusters[[:space:]]*$|\1集群|' \
+        -e 's|^\(category:[[:space:]]*\)Interactive[[:space:]]*Apps[[:space:]]*$|\1交互式应用|' \
+        -e 's|^\(subcategory:[[:space:]]*\)Desktops[[:space:]]*$|\1桌面|' \
+        -e 's|^\(subcategory:[[:space:]]*\)Servers[[:space:]]*$|\1服务器|' \
+        -e 's|^\(subcategory:[[:space:]]*\)GUIs[[:space:]]*$|\1图形界面|' \
+        -e 's|^\(subcategory:[[:space:]]*\)Engineering[[:space:]]*$|\1工程软件|' \
+        -e 's|^\(subcategory:[[:space:]]*\)Classrooms[[:space:]]*$|\1课堂|' \
+        "$m"
+    done
+  changed_when: false
+
+# ---------------------------------------------------------------------------
 # Pre-stage sys apps into each portal user's PUN (per-user nginx)
 #
 # nginx_stage only stages an app into the PUN when the request arrives

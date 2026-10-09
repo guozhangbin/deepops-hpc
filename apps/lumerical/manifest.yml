@@ -1,7 +1,7 @@
 ---
 name: Lumerical DEVICE suite
-category: Interactive Apps
-subcategory: Engineering
+category: 交互式应用
+subcategory: 工程软件
 role: batch_connect
 description: |
   Launch Lumerical DEVICE suite in a VNC session on a compute node of

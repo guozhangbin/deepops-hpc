@@ -1,7 +1,7 @@
 ---
 name: Jupyter
-category: Interactive Apps
-subcategory: Servers
+category: 交互式应用
+subcategory: 服务器
 role: batch_connect
 description: |
   Launch a [Jupyter] server on a compute node of the UltraLAB HPC cluster

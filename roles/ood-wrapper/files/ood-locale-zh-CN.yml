@@ -1,0 +1,13 @@
+# Supplemental zh-CN translations for the Open OnDemand dashboard.
+#
+# Installed to /etc/ood/config/locales/zh-CN.yml, which the dashboard loads
+# AFTER its bundled config/locales/zh-CN.yml (see config/initializers/
+# locales.rb: extra_locales = Configuration.locales_root.join('*.{yml,rb}'),
+# locales_root = /etc/ood/config/locales). Keys added here fill in strings the
+# upstream zh-CN.yml does not cover (they otherwise fall back to English).
+zh-CN:
+  dashboard:
+    # batch_connect/sessions/connections/_novnc.html.erb tooltip
+    opens_in_new_tab: 在新标签页中打开
+    # workflows/_form.html.erb OOD_WORKFLOW_SYNC_KEY help
+    jobs_workflow_sync_key_help: 启用后，本工作流中的每个启动器都会获得相同的 <code>OOD_WORKFLOW_SYNC_KEY</code> 环境变量（每次工作流运行都唯一的随机令牌）。可用于在依赖作业之间生成同步的文件名、锁文件或共享标识。

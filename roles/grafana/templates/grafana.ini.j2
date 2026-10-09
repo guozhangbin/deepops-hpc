@@ -4,3 +4,7 @@ admin_password = {{ grafana_cfg_pass }}
 
 [auth.anonymous]
 enabled = true
+
+[users]
+# Default UI language (IETF language tag); users can override per-profile.
+default_language = {{ grafana_default_language }}

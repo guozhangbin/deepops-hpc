@@ -80,3 +80,10 @@ ood_portal_host: "{{ hostvars[groups['ood-portal'][0]].ansible_host }}"
 ood_portal_motd_content: "Welcome to the cluster portal."
 # Rendering format: plaintext, markdown, markdown_erb, osc, rss, or text_erb.
 ood_portal_motd_format: plaintext
+
+# ---- Dashboard default UI language ------------------------------------------
+# Locale for the portal dashboard (written to /etc/ood/config/apps/dashboard/env
+# as OOD_LOCALE). The dashboard ships full locale files under
+# config/locales/ (en, fr-CA, ja_JP, zh-CN, ...); "en" is OOD's default.
+# Override in config/group_vars/ood-portal.yml to change the portal language.
+ood_dashboard_locale: zh-CN
