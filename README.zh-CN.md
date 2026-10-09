@@ -73,11 +73,14 @@
 | **私有镜像仓库** | `master:5000`（已配置为 insecure registry + mirror） |
 | **监控** | Prometheus / Grafana / Alertmanager（master，Docker 容器）；node-exporter（9100）、DCGM-exporter（9400）、slurm-exporter（8080，三台） |
 | **日志** | rsyslog 集中（server=`master`） |
+| **Web 门户** | Open OnDemand 4.2（Apache + Passenger，`master`）：23 个应用目录 + Desktop（Xfce/VNC）+ Shell 网页终端，详见第 9 节 |
 
 ## 4. 快速使用
 
 > 以下命令在 `master`（或任意可访问 Slurm 的节点）上以普通用户执行。
-> 计算节点默认**限制 SSH**：只有正在运行作业的用户才能登录（`slurm_restrict_node_access: true`）。
+> 计算节点默认**限制 SSH**：只有正在运行作业的用户才能登录（`slurm_restrict_node_access: true`）；
+> 门户用户 `new` 在 `slurm_allow_ssh_user` 白名单（`/etc/localusers`）中，无作业也可登录
+> ——这是 Shell 网页终端（第 9 节）的前提之一。
 
 ### 4.1 查看集群状态
 
@@ -247,6 +250,9 @@ ansible-playbook -l slurm-cluster playbooks/slurm-cluster.yml -k
 - **监控**：Prometheus / Grafana / Alertmanager / slurm-exporter 均 `Up`；
   node-exporter + DCGM-exporter 三台 `Up`；6 个抓取目标全部 `up`；
   9100/9400 端口返回 HTTP `200`。
+- **门户**：`validate_ood.py --json` 返回 `"ok": true`
+  （登录 / 品牌 / 集群配置 / 23 个应用全部在位；Shell 网页终端
+  WebSocket 在 `master` / `gpu01` / `gpu02` 三台均验证通过，见第 9 节）。
 
 > 依据本仓库规则：**以校验器的 `"ok": true` 为成功信号**，而不是 playbook 的
 > `failed=0`。两者此处均满足。
@@ -360,40 +366,92 @@ OnDemand），作为通过 Web 提交 GPU 作业的门户：
   返回 401（Basic 认证）。
 - 登录用户：`new`（密码见 `config/group_vars/ood-portal.yml` 的
   `ood_portal_users`；条目存于 `/etc/httpd/.htpasswd`）。
-- 应用：**Jupyter**（Batch Connect 应用，`/var/www/ood/apps/sys/jupyter`，
-  源自本仓库 `apps/jupyter/`）——表单可选 **模式**（JupyterLab /
-  Notebook）、**GPU 数量**（0–2）、**运行时长**（如 `04:00:00`）。
-- 作业去向：提交后 `squeue` 可见 `jupyter` 作业被调度到 `gpu01`/`gpu02`
-  （`-p batch --gpus-per-node N --time HH:MM:SS`，`AllocTRES` 含
-  `gres/gpu=N`）；JupyterLab 在计算节点上监听随机端口（见会话目录
-  `/home/new/ondemand/data/sys/dashboard/batch_connect/sys/jupyter/output/<uuid>/`
-  下的 `connection.yml` 与 `output.log`）。
-- 连接方式：门户的 "Connect" 链接经 Apache `/rnode/<节点>/<端口>/...`
-  反代到计算节点上的 Jupyter（配置
-  `/etc/httpd/conf.d/ood-node-proxy.conf`；计算节点防火墙已放行门户主机）。
+- **应用目录（23 个，全部启用）**：
+  - 17 个 OSC 上游应用：ANSYS Workbench、Jupyter、Jupyter Spark、MATLAB、
+    COMSOL、code-server、VMD、Schrödinger、RStudio Server、PyMOL、Ollama、
+    MLflow、TensorBoard、ParaView、Abaqus、Classroom Jupyter / RStudio；
+  - 6 个本地应用（本仓库 `apps/`，设计参照 CHPC
+    [chpc-uofu/ood-ge-apps-v4](https://github.com/chpc-uofu/ood-ge-apps-v4)）：
+    ANSYS Electronics Desktop（`ansysedt`）、ANSYS Fluent（`ansysfluent`）、
+    Lumerical、AlphaFold、CST Studio Suite（`cst_studio`）、
+    Altair FEKO（`feko`）——其中 5 个 GUI 应用在 VNC/Xfce 会话中启动
+    （浏览器 noVNC），AlphaFold 为纯 Web 变体；
+  - **Desktop** 应用（`bc_desktop`）：完整 Xfce 桌面（TigerVNC +
+    websockify + `/rnode` 反代），节点侧运行时由 playbook 安装；
+  - 内置应用：Dashboard、My Jobs、Active Jobs、Files、File Editor、
+    Module Browser、Projects、**Shell（网页终端）**、System Status。
+- **Shell 网页终端**：`http://master/pun/sys/shell/ssh/<master|gpu01|gpu02>`
+  （内置 Shell 应用，hterm + WebSocket）。两个前提：
+  1. `roles/ood-wrapper` 写
+     `/etc/ood/config/apps/shell/env`：
+     `OOD_SSHHOST_ALLOWLIST=master:gpu01:gpu02`（由 inventory 组
+     `ood-portal` + `slurm-node` 推导）；
+  2. 站点配置 `slurm_allow_ssh_user: ["new"]`
+     （`config/group_vars/slurm-cluster.yml`）把 `new` 放入计算节点的
+     `/etc/localusers`（及 `/etc/slurm/localusers.backup`），使
+     `pam_slurm_adopt` 在无作业时放行 SSH。
+- **Jupyter**：使用 OSC 上游 `jupyter` 应用（启用后替代本仓库
+  `apps/jupyter`）。"Connect to Jupyter" 链接经
+  `/rnode/<节点>/<端口>/<jupyter_api>` 反代（配置
+  `/etc/httpd/conf.d/ood-node-proxy.conf`）。上游 `view.html.erb` 向
+  `/node/.../login` POST（无认证 Jupyter 下 404），故 `roles/ood-wrapper`
+  每次运行都安装修正后的 view——OSC 角色每次都会重新 clone 该应用，clone
+  与本仓库补丁冲突而进入 rescue，master 的 `rescued=1` 属预期。
+- **商业软件注意**：本地应用与 OSC 商业应用（ANSYS / MATLAB / COMSOL /
+  CST / FEKO / Abaqus / Schrödinger 等）要求对应软件**已安装在计算节点**
+  （在 PATH 或作为 environment module）；DeepOps 不安装授权软件。
+  应用会出现在菜单中，但软件就位前作业会启动失败（各应用 README 有
+  具体前置条件）。
+- 作业去向：提交后 `squeue` 可见作业被调度到 `gpu01`/`gpu02`
+  （如 `-p batch --gpus-per-node N --time HH:MM:SS`，`AllocTRES` 含
+  `gres/gpu=N`）；会话目录在
+  `/home/new/ondemand/data/sys/dashboard/batch_connect/<app>/output/<uuid>/`
+  （`connection.yml` 与 `output.log`）。
 
-### 9.1 部署与校验
+### 9.1 本地应用的通用表单字段
+
+6 个本地应用共享一组 CHPC 风格的字段（详见各 `apps/<name>/README.md`）：
+
+| 字段 | 效果 |
+|------|------|
+| Memory per node (GB) | `0` = 集群默认；否则 `sbatch --mem <N>G` |
+| Node list | `sbatch -w` 限制节点（如 `gpu01`） |
+| Environment module | 启动前加载模块（如 `ansysedt/2025R1`）；CHPC `auto_modules_*` 的可移植形式 |
+| Additional environment | 任意 shell 行（exports / module load / 工具开关） |
+
+5 个 VNC 应用还暂存 XFCE 桌面配置（`template/config/xfce4/...`：面板、
+终端、菜单）。OOD vnc 模板以 `-noxstartup` 启动 Xvnc，由脚本负责拉起会话：
+`dbus-launch` + 后台 `xfwm4` / `xfce4-panel` / `xfsettingsd`——CHPC 子壳
+脚本的两个坑（`xfwm4` 前台阻塞后续组件、无 D-Bus 会话总线时面板/设置
+退出）均已规避，并在 `gpu01` 上做过真实 VNC 会话验证。
+
+### 9.2 部署与校验
 
 ```bash
 # 注意:该 playbook 有两个 play(门户主机 + 计算节点运行时)。
 # 必须同时限定两个组;只写 -l ood-portal 会静默跳过节点侧 play,
-# 节点上的 Jupyter 运行时 / nvidia-persistenced 修复将不会生效。
+# 节点上的 VNC/Jupyter 运行时 / nvidia-persistenced 修复将不会生效。
 ansible-playbook -l ood-portal,slurm-node playbooks/ood-portal.yml
 python3 scripts/validation/validate_ood.py --json   # 在 master 上（建议 root）
 ```
 
-期望 `"ok": true`、`"login_ok": true`（完整链路另见上文 Jupyter 作业验证：
-提交 302 → 作业 RUNNING + GPU 已分配 → `/rnode` 代理返回
-`<title>JupyterLab`）。分步操作与失败分支见
+期望 `"ok": true`、`"login_ok": true`，23 个应用全部在位（可用
+`--expected-apps=ansysedt,ansysfluent,lumerical,alphafold,cst_studio,feko,...`
+显式枚举；已验证 `apps_found: 23`、`apps_missing: []`）。Jupyter 完整链路
+（提交 302 → 作业 RUNNING + GPU 已分配 → `/rnode` 代理返回
+`<title>JupyterLab`）与 Shell 网页终端（WebSocket → 三台主机均拿到
+bash 提示符）已验证通过。分步操作与失败分支见
 [`skills/deploy-ood-portal/`](skills/deploy-ood-portal/SKILL.md)，问题与修复
-逐条记录见 [CHANGELOG.md](CHANGELOG.md)（2026-09-14 / 2026-09-15 两节）。
+逐条记录见 [CHANGELOG.md](CHANGELOG.md)。
 
-### 9.2 关键文件
+### 9.3 关键文件
 
 | 路径 | 说明 |
 |------|------|
-| `playbooks/ood-portal.yml` | 门户部署入口（含 Jupyter 应用、`/rnode` 代理、节点防火墙、Jupyter 运行时） |
-| `apps/jupyter/` | DeepOps Jupyter Batch Connect 应用（表单、提交模板、启动脚本） |
-| `config.example/group_vars/ood-portal.yml` | 站点配置模板（品牌、`deepops` 集群、用户） |
+| `playbooks/ood-portal.yml` | 门户部署入口（应用目录、`/rnode` 代理、节点防火墙、节点运行时） |
+| `roles/ood-wrapper/` | OOD 包装角色：应用安装、Jupyter Connect 链接修正、Shell 白名单、Desktop 应用修补、PUN 预置/重启 |
+| `apps/{ansysedt,ansysfluent,lumerical,alphafold,cst_studio,feko}/` | 6 个本地 Batch Connect 应用（表单、提交模板、会话脚本、XFCE 配置、图标、README） |
+| `config.example/group_vars/ood-portal.yml` | 站点配置模板（品牌、`deepops` 集群、应用目录、用户） |
+| `config/group_vars/slurm-cluster.yml` | `slurm_allow_ssh_user`（Shell 网页终端的节点侧 SSH 白名单） |
 | `scripts/validation/validate_ood.py` | 门户部署后校验器 |
 | `skills/deploy-ood-portal/SKILL.md` | 分步部署技能与失败分支 |
