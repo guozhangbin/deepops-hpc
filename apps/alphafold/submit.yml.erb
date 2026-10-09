@@ -13,6 +13,7 @@ batch_connect:
   conn_params:
     - jupyter_api
 <% gpus_n = (gpus.to_s).to_i -%>
+<% mem_n = (memory.to_s).to_i -%>
 script:
   job_name: alphafold
   queue_name: batch
@@ -22,3 +23,7 @@ script:
   native:
     - "--time"
     - "<%= walltime %>"
+<% if mem_n > 0 %>
+    - "--mem"
+    - "<%= mem_n %>G"
+<% end %>

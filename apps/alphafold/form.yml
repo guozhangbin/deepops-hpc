@@ -1,10 +1,16 @@
 ---
+# Widgets must be valid for OOD 4.2's BootstrapForm builder (e.g. text_field,
+# text_area, select, check_box, radio). "number" and "text" are NOT valid and
+# 500 the form render.
 cluster:
   - "deepops"
 form:
   - mode
   - gpus
   - walltime
+  - memory
+  - module
+  - additional_environment
 attributes:
   mode:
     label: "Interface"
@@ -14,10 +20,6 @@ attributes:
       - ["Jupyter Lab", "1"]
       - ["Jupyter Notebook", "0"]
     help: "Notebook interface for AlphaFold 2 work"
-  # NB: valid widgets in OOD 4.2's create_widget: select, check_box,
-  # radio/radio_button, path_selector, file_attachments, resolution_field,
-  # or anything BootstrapForm exposes (e.g. text_field). "number" and
-  # "text" are NOT valid and 500 the form render.
   gpus:
     label: "GPUs"
     widget: "text_field"
@@ -30,3 +32,16 @@ attributes:
     widget: "text_field"
     value: "04:00:00"
     help: "Job walltime limit; the session is killed when it elapses"
+  memory:
+    label: "Memory (GB)"
+    widget: "text_field"
+    value: "0"
+    help: "0 = cluster default. Otherwise passed to sbatch as --mem <value>G"
+  module:
+    label: "Environment module (optional)"
+    widget: "text_field"
+    help: "Module to load before launch (e.g. the AlphaFold environment module). Empty = use PATH."
+  additional_environment:
+    label: "Additional environment (optional)"
+    widget: "text_area"
+    help: "Extra shell lines run before launch: exports, module loads, tool flags. One command per line."

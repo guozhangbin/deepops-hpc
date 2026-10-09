@@ -1,14 +1,16 @@
 <%# Sourced by the generated job script BEFORE the main script starts.
-    Sets variables consumed by both the main script and connection.yml. -%>
+    Sets variables consumed by both the main script and connection.yml.
+    NB: rendered with a TemplateBinding — form values must be `context.<attr>`. -%>
 
 # App root path (lab vs notebook) recorded in connection.yml; the session
 # panel's "Connect" button builds /rnode/<host>/<port>/<jupyter_api>
-# NB: rendered with a TemplateBinding — form values must be `context.<attr>`
 <% if context.mode == "0" -%>
 export jupyter_api="tree"
 <% else -%>
 export jupyter_api="lab"
 <% end -%>
+
+export APP_MODULE="<%= context.module %>"
 
 # Find a free TCP port for the Jupyter server (helper provided by the template)
 port=$(find_port localhost 2000 65535)

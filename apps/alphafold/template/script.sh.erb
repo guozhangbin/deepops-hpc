@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-<%# Main script of the Jupyter app (runs inside the Slurm job).
+<%# Main script of the AlphaFold 2 app (runs inside the Slurm job).
     $port is set by before.sh; CUDA_VISIBLE_DEVICES is set by Slurm when a
     GPU was allocated. -%>
 set -euo pipefail
@@ -15,6 +15,16 @@ fi
 # Run from the user's home directory (shared NFS) so notebooks/files persist
 # across sessions.
 cd "${HOME}"
+
+# Optional environment module (portable form of CHPC's auto_modules_* field)
+if [[ -n "${APP_MODULE:-}" ]] && [[ $(type -t module) == "function" ]]; then
+  module load ${APP_MODULE}
+fi
+
+# Additional user environment (CHPC additional_environment pattern)
+<%- if context.additional_environment.to_s.strip != "" -%>
+<%= context.additional_environment.gsub(/\r\n?/, "\n") %>
+<%- end -%>
 
 JUPYTER_ARGS=(
   --ip=0.0.0.0

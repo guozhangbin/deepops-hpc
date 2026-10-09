@@ -1,15 +1,66 @@
 #!/usr/bin/env bash
-<%# Main script of the ANSYS Fluent app (runs inside the Slurm
-    job under the VNC display started by the OOD vnc template — $DISPLAY is
-    already set by the template's run_script). -%>
+<%# Main script of the ANSYS Fluent app (runs inside the Slurm job under the
+    VNC display started by the OOD vnc template — $DISPLAY is already set by
+    the template's run_script).
+    Session bootstrap after CHPC's ood-ge-apps-v4 ansysedt_app: the OOD vnc
+    template starts Xvnc with -noxstartup, so the window manager and panel
+    must be launched here. -%>
 set -euo pipefail
 
 echo "Starting ANSYS Fluent on $(hostname) (display ${DISPLAY:-?})"
 
-# APP_CMD is exported by before.sh (form value "command"); fall back to the
-# standard launcher name. The software must be installed and on PATH on the
-# compute node (licensed product — see README.md).
-CMD="${APP_CMD:-fluent 3d}"
+# Environment hygiene (workarounds borrowed from CHPC ood-ge-apps-v4)
+unset XDG_RUNTIME_DIR   # silence dconf write-permission spam
+unset SLURM_GTIDS       # IBM/Platform MPI vs Slurm
 
+# ANSYS workarounds (CHPC ansysedt_app / ansys_workbench_app)
+export ANSYS_LOCK="OFF"          # do not fail on stale ANSYS lock files
+export CUE_GRAPHICS="mesa"       # software rendering fallback
+export I_MPI_PMI_EXTENSIONS=on   # Intel MPI under Slurm
+
+# Work from the user's home directory (shared NFS — files persist)
+cd "${HOME}"
+
+# Launch the Xfce window manager and panel in the background. The OOD vnc
+# template starts Xvnc with -noxstartup (no session manager, no D-Bus
+# session bus), so start one if missing and launch each component as a
+# background daemon. template/config/ is rsync'd into the session's staged
+# root by the OOD dashboard (session.staged_root), so the panel/terminal
+# settings below are the staged ones. (CHPC ood-ge-apps-v4 pattern, adjusted:
+# their subshell runs xfwm4 in the foreground, which blocks and silently
+# skips the remaining components.)
+(
+  export XDG_CONFIG_HOME="<%= session.staged_root.join("config") %>"
+  export XDG_DATA_HOME="<%= session.staged_root.join("share") %>"
+  export XDG_CACHE_HOME="$(mktemp -d)"
+  if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]]; then
+    eval "$(dbus-launch --sh-syntax)"
+  fi
+  xfwm4 --compositor=off --sm-client-disable &
+  xsetroot -solid "#D3D3D3" 2>/dev/null || true
+  xfsettingsd --sm-client-disable &
+  xfce4-panel --sm-client-disable &
+  wait
+) &
+
+# Optional environment module — portable form of CHPC's auto_modules_* field
+# (the modulefiles tree lives under /sw/modules on the compute nodes).
+if [[ -n "${APP_MODULE:-}" ]] && [[ $(type -t module) == "function" ]]; then
+  module load ${APP_MODULE}
+fi
+
+# Additional user environment (CHPC additional_environment pattern)
+<%- if context.additional_environment.to_s.strip != "" -%>
+<%= context.additional_environment.gsub(/\r\n?/, "\n") %>
+<%- end -%>
+
+# Launch the app (APP_CMD is exported by before.sh; the fallback below is
+# the standard launcher name). The software must be installed on the compute
+# node (licensed product — see README.md).
+CMD="${APP_CMD:-fluent 3d}"
+if [[ -z "${CMD}" ]]; then
+  echo "ERROR: no launch command set (form field 'Launch command' is empty)" >&2
+  exit 1
+fi
 # shellcheck disable=SC2086
 exec ${CMD}

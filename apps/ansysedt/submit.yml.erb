@@ -19,6 +19,7 @@ batch_connect:
     vncserver -list 2>/dev/null |
     awk '$1 ~ /^:/ { system("kill -0 " $2 " 2>/dev/null || vncserver -kill " $1) }'
 <% gpus_n = (gpus.to_s).to_i -%>
+<% mem_n = (memory.to_s).to_i -%>
 script:
   job_name: ansysedt
   queue_name: batch
@@ -32,4 +33,12 @@ script:
 <% if gpus_n > 0 %>
     - "--gpus-per-node"
     - "<%= gpus_n %>"
+<% end %>
+<% if mem_n > 0 %>
+    - "--mem"
+    - "<%= mem_n %>G"
+<% end %>
+<% if nodelist.to_s.strip != "" %>
+    - "-w"
+    - "<%= nodelist.strip %>"
 <% end %>

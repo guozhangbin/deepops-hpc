@@ -1,4 +1,7 @@
 ---
+# Widgets must be valid for OOD 4.2's BootstrapForm builder (e.g. text_field,
+# text_area, select, check_box, radio). "number" and "text" are NOT valid and
+# 500 the form render.
 cluster:
   - "deepops"
 form:
@@ -6,7 +9,11 @@ form:
   - cores
   - gpus
   - walltime
+  - memory
+  - nodelist
+  - module
   - command
+  - additional_environment
 attributes:
   nodes:
     label: "Nodes"
@@ -26,8 +33,25 @@ attributes:
     widget: "text_field"
     value: "08:00:00"
     help: "Job walltime limit; the session is killed when it elapses"
+  memory:
+    label: "Memory per node (GB)"
+    widget: "text_field"
+    value: "0"
+    help: "0 = cluster default. Otherwise passed to sbatch as --mem <value>G"
+  nodelist:
+    label: "Node list (optional)"
+    widget: "text_field"
+    help: "Restrict the job to specific nodes (sbatch -w), e.g. gpu01. Empty = any eligible node."
+  module:
+    label: "Environment module (optional)"
+    widget: "text_field"
+    help: "Module to load before launch, e.g. lumerical/2025.1 (CHPC auto_modules_* pattern). Empty = use PATH."
   command:
     label: "Launch command"
     widget: "text_field"
     value: "lumerical"
-    help: "Command executed inside the VNC session; must be on PATH on the compute node (override if the launcher binary has a different name)"
+    help: "Command executed inside the VNC session (CHPC uses 'launcher' for the Lumerical DEVICE suite); override if the launcher binary has a different name"
+  additional_environment:
+    label: "Additional environment (optional)"
+    widget: "text_area"
+    help: "Extra shell lines run before launch: exports, module loads, tool flags. One command per line."
