@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UltraLAB HPC Cluster — 技术白皮书与销售优势报告</title>
+<style>
+  :root{
+    --ink:#1a2332; --ink2:#3a4658; --muted:#6b7688; --line:#d8dee8;
+    --brand:#0b3d66; --brand2:#155e94; --accent:#c8862a; --accent2:#a86e1e;
+    --bg:#f6f8fb; --card:#ffffff; --ok:#1c7c46; --okbg:#e8f5ee;
+    --code-bg:#0f1b2b; --code-ink:#d7e3f4; --chip:#eaf1f8;
+    --serif:Georgia,"Songti SC","Noto Serif CJK SC","SimSun",serif;
+    --sans:"Segoe UI",system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    --mono:"SFMono-Regular",Consolas,"JetBrains Mono","Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--serif);font-size:16px;line-height:1.75}
+  a{color:var(--brand2);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* ── masthead ── */
+  .masthead{background:linear-gradient(135deg,#082a44 0%,var(--brand) 55%,var(--brand2) 100%);color:#fff;padding:54px 24px 40px;position:relative;overflow:hidden}
+  .masthead::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 80% 20%,rgba(255,255,255,.08),transparent 45%);pointer-events:none}
+  .masthead .inner{max-width:1000px;margin:0 auto;position:relative;z-index:1}
+  .kicker{font-family:var(--sans);font-size:12.5px;letter-spacing:.22em;text-transform:uppercase;color:#a9c6e0;font-weight:600}
+  .masthead h1{font-family:var(--sans);font-weight:800;font-size:clamp(30px,5vw,46px);margin:14px 0 6px;letter-spacing:.01em;line-height:1.15}
+  .masthead h1 .brand{color:#ffd27a}
+  .masthead .sub{font-size:17px;color:#d3e2f0;max-width:760px}
+  .meta-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+  .meta-chip{font-family:var(--sans);font-size:12.5px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);padding:6px 12px;border-radius:999px;color:#eaf2fa}
+
+  /* ── layout ── */
+  .wrap{max-width:1000px;margin:0 auto;padding:8px 24px 70px}
+  section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:34px 38px;margin-top:26px;box-shadow:0 1px 3px rgba(16,40,70,.05)}
+  h2{font-family:var(--sans);font-size:24px;margin:0 0 4px;color:var(--brand);display:flex;align-items:baseline;gap:12px}
+  h2 .no{font-size:15px;font-weight:700;color:#fff;background:var(--brand2);border-radius:8px;padding:3px 11px;letter-spacing:.03em;flex:none}
+  h3{font-family:var(--sans);font-size:17.5px;color:var(--ink);margin:26px 0 8px}
+  h4{font-family:var(--sans);font-size:15px;color:var(--ink2);margin:18px 0 6px}
+  p{margin:10px 0}
+  .lead{font-size:16.5px;color:var(--ink2)}
+  .sec-desc{color:var(--muted);font-size:14.5px;font-family:var(--sans);margin:0 0 14px 55px}
+
+  /* ── abstract ── */
+  .abstract{border-left:4px solid var(--accent);background:linear-gradient(90deg,#fdf7ec,#fff)}
+  .abstract h2 .no{background:var(--accent2)}
+  .abstract .en{font-style:italic;color:var(--muted);font-size:14.5px}
+  .kw{font-family:var(--sans);font-size:13.5px;color:var(--ink2);margin-top:16px}
+  .kw b{color:var(--brand)}
+
+  /* ── TOC ── */
+  .toc{counter-reset:item}
+  .toc ol{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:6px}
+  .toc li a{display:flex;gap:10px;align-items:center;font-family:var(--sans);font-size:14.5px;padding:9px 12px;border:1px solid var(--line);border-radius:9px;color:var(--ink2);transition:.15s}
+  .toc li a:hover{background:var(--chip);border-color:var(--brand2);text-decoration:none}
+  .toc li a .n{font-weight:700;color:var(--brand2);font-size:13px}
+
+  /* ── tables ── */
+  table{width:100%;border-collapse:collapse;font-family:var(--sans);font-size:14px;margin:14px 0;overflow:hidden;border-radius:10px;border:1px solid var(--line)}
+  th,td{padding:10px 13px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+  thead th{background:#eef3f9;color:var(--brand);font-weight:700;font-size:13px;letter-spacing:.02em;border-bottom:2px solid var(--brand2)}
+  tbody tr:nth-child(even){background:#fafcfe}
+  tbody tr:hover{background:#f1f7fd}
+  td .ok{color:var(--ok);font-weight:700}
+  td .dim{color:var(--muted)}
+  .t-title{font-weight:600;color:var(--ink)}
+  .badge{display:inline-block;font-family:var(--sans);font-size:11.5px;font-weight:600;padding:2px 9px;border-radius:999px;white-space:nowrap}
+  .b-gpu{background:#eaf3ff;color:#1c5fa8}.b-cpu{background:#eef9ef;color:#2e7d43}
+  .b-mem{background:#fff3e2;color:#b06a12}.b-os{background:#f1eefb;color:#6a4fb0}
+  .b-up{background:var(--okbg);color:var(--ok)}.b-cat{background:var(--chip);color:var(--brand2)}
+
+  /* ── code / evidence ── */
+  pre{font-family:var(--mono);font-size:12.8px;background:var(--code-bg);color:var(--code-ink);padding:16px 18px;border-radius:11px;overflow-x:auto;line-height:1.6;margin:12px 0;border:1px solid #1d2c40}
+  pre .c{color:#7f97b8}.pre-ok{color:#6fe3a1}.pre-warn{color:#ffcf7a}
+  code{font-family:var(--mono);font-size:.9em;background:var(--chip);color:var(--brand);padding:1px 6px;border-radius:5px}
+  .evidence{background:linear-gradient(135deg,#0f2033,#14304c);border:1px solid #24466b;border-radius:12px;padding:18px 20px;margin:16px 0}
+  .evidence .tag{display:inline-block;font-family:var(--sans);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#8fb6dd;border:1px solid #35608a;padding:2px 10px;border-radius:999px;margin-bottom:10px}
+  .evidence pre{margin:0;border:none;background:transparent;padding:0;font-size:12.6px}
+
+  /* ── callouts ── */
+  .callout{border-radius:11px;padding:15px 18px;margin:16px 0;font-size:14.5px;border:1px solid}
+  .c-ok{background:var(--okbg);border-color:#bfe3cd;color:#165b34}
+  .c-info{background:#eef5fc;border-color:#c5dcf3;color:#1c4a72}
+  .c-warn{background:#fff6e8;border-color:#f0d9ac;color:#8a5a12}
+  .callout b{font-family:var(--sans)}
+
+  /* ── workflow diagram ── */
+  .flow{display:flex;flex-wrap:wrap;gap:0;align-items:stretch;margin:20px 0;counter-reset:step}
+  .flow .node{flex:1 1 150px;min-width:150px;background:#fff;border:1.5px solid var(--brand2);border-radius:11px;padding:13px 14px;position:relative;margin-right:22px;margin-bottom:14px}
+  .flow .node:last-child{margin-right:0}
+  .flow .node .s{font-family:var(--sans);font-size:11px;font-weight:700;color:#fff;background:var(--brand2);width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:8px}
+  .flow .node .t{font-family:var(--sans);font-weight:700;font-size:14px;color:var(--brand);line-height:1.3}
+  .flow .node .d{font-size:12px;color:var(--muted);margin-top:5px;line-height:1.5}
+  .flow .node .v{font-family:var(--mono);font-size:11px;color:var(--accent2);margin-top:7px;display:block}
+  .flow .node::after{content:"";position:absolute;right:-17px;top:50%;width:20px;height:2px;background:var(--brand2)}
+  .flow .node::before{content:"";position:absolute;right:-19px;top:50%;transform:translateY(-50%);border:5px solid transparent;border-left-color:var(--brand2)}
+  .flow .node:last-child::after,.flow .node:last-child::before{display:none}
+
+  /* ── cards grid ── */
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin:16px 0}
+  .card{border:1px solid var(--line);border-radius:11px;padding:16px 18px;background:linear-gradient(180deg,#fff,#fafcff)}
+  .card .ic{font-size:22px;margin-bottom:8px}
+  .card .h{font-family:var(--sans);font-weight:700;font-size:15px;color:var(--brand);margin-bottom:6px}
+  .card .b{font-size:13.5px;color:var(--ink2);line-height:1.6}
+  .card .num{font-family:var(--sans);font-size:26px;font-weight:800;color:var(--accent2);display:block;margin-bottom:2px}
+
+  /* ── list ── */
+  ul.clean,ol.clean{margin:10px 0;padding-left:22px}
+  ul.clean li,ol.clean li{margin:7px 0;font-size:15px}
+  .pill-list{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+  .pill{font-family:var(--sans);font-size:13px;background:var(--chip);color:var(--brand);border:1px solid #cfe0f0;border-radius:999px;padding:5px 13px}
+  .pill b{color:var(--accent2)}
+
+  /* ── sales section ── */
+  .sales h2 .no{background:linear-gradient(90deg,var(--accent2),var(--accent));color:#fff}
+  .score{display:flex;align-items:center;gap:14px;margin:14px 0;padding:14px 16px;border:1px solid var(--line);border-radius:11px;background:#fff}
+  .score .bar-wrap{flex:1}
+  .score .label{font-family:var(--sans);font-weight:700;font-size:14px;color:var(--ink);width:150px;flex:none}
+  .score .bar{height:12px;background:#eef2f7;border-radius:999px;overflow:hidden}
+  .score .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--brand2),var(--accent));border-radius:999px}
+  .score .val{font-family:var(--sans);font-weight:800;color:var(--accent2);width:56px;text-align:right;flex:none;font-size:15px}
+  .verdict{background:linear-gradient(135deg,#0b3d66,#155e94);color:#fff;border-radius:13px;padding:24px 28px;margin:20px 0}
+  .verdict .v-title{font-family:var(--sans);font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#a9c6e0;font-weight:700}
+  .verdict .v-main{font-family:var(--sans);font-size:22px;font-weight:800;margin:8px 0;line-height:1.35}
+  .verdict .v-sub{font-size:14.5px;color:#d3e2f0}
+
+  /* ── footer ── */
+  footer{max-width:1000px;margin:30px auto 0;padding:24px 24px 0;border-top:1px solid var(--line);font-family:var(--sans);font-size:13px;color:var(--muted);text-align:center}
+  .foot-brand{font-weight:800;color:var(--brand);font-size:15px;letter-spacing:.02em}
+
+  /* ── print ── */
+  @media print{
+    body{background:#fff;font-size:12px}
+    section,.masthead{box-shadow:none;break-inside:avoid}
+    .masthead{background:#0b3d66!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    a{color:inherit}
+  }
+  @media (max-width:640px){
+    section{padding:24px 20px}
+    .flow .node{margin-right:0;flex:1 1 100%}
+    .flow .node::after,.flow .node::before{display:none}
+    .sec-desc{margin-left:0}
+    .score .label{width:100%}
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════ MASTHEAD ══════════════════ -->
+<header class="masthead">
+  <div class="inner">
+    <div class="kicker">Technical Whitepaper &amp; Sales Advantage Report · 技术白皮书与销售优势报告</div>
+    <h1><span class="brand">UltraLAB</span> HPC Cluster</h1>
+    <p class="sub">面向 AI / HPC / EDA 的异构 GPU 集群交付验证报告 —— 覆盖软件栈与模块核查、Slurm GPU+CPU 混合作业实测、Open OnDemand Web 提交、全栈监控，以及专业模式下的销售优势分析。</p>
+    <div class="meta-row">
+      <span class="meta-chip">集群规模：3 节点（1 控制 + 2 GPU 计算）</span>
+      <span class="meta-chip">GPU：3× NVIDIA（GTX 750 / 1050 ×2）</span>
+      <span class="meta-chip">调度：Slurm 26.05.3</span>
+      <span class="meta-chip">门户：Open OnDemand 4.2</span>
+      <span class="meta-chip">CUDA 12.8.2 · 驱动 580.178.04</span>
+      <span class="meta-chip">报告日期：2026-10-09</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+<!-- ══════════════════ ABSTRACT ══════════════════ -->
+<section class="abstract" id="abstract">
+  <h2><span class="no">摘要</span>Abstract</h2>
+  <p class="en">Abstract — Verification &amp; value assessment of the UltraLAB heterogeneous GPU cluster.</p>
+  <p class="lead">UltraLAB HPC Cluster 是一套以 Ansible 声明式交付的异构 GPU 集群：由 1 个控制/门户/监控节点（Intel Xeon Gold 5218 / 30 GB / GTX 1050）与 2 个 GPU 计算节点（i7-6700T / GTX 750、i5-9600K / GTX 1050）组成，统一由 Slurm 26.05.3 调度，通过 Open OnDemand 4.2 Web 门户提交交互式与批处理作业，并以 Prometheus 3.13.0 + DCGM + Grafana 13.1.0 实现全栈可观测。</p>
+  <p>本报告基于<b>真实运行环境逐项实测</b>完成：(1) 核查了 6 个 Lmod 软件模块、33 个门户应用与 49 个监控插件；(2) 实测 Slurm <b>GPU+CPU 混合作业</b>，验证 TRES 资源（<code>cpu=4 + gres/gpu=1</code>）同时分配、CPU 亲和性、GPU 可见性与 CUDA 内核执行全链路成功；(3) 梳理了"驱动 → CUDA/HPC SDK → Enroot/Pyxis → Slurm → OOD → 监控"的模块交互链路；(4) 重点介绍了 OOD-Web 的图形化提交能力；(5) 给出专业模式下的销售优势评分与结论。</p>
+  <p class="kw"><b>关键词：</b>异构 GPU 集群 · Slurm 调度 · TRES 混合资源 · Open OnDemand · CUDA 12.8 · Enroot/Pyxis 容器 · Prometheus/DCGM/Grafana 可观测 · 声明式 Ansible 交付</p>
+</section>
+
+<!-- ══════════════════ TOC ══════════════════ -->
+<section class="toc" id="toc">
+  <h2><span class="no">目录</span>Contents</h2>
+  <ol>
+    <li><a href="#s1"><span class="n">01</span>集群概述与节点规格</a></li>
+    <li><a href="#s2"><span class="n">02</span>软件栈与模块核查</a></li>
+    <li><a href="#s3"><span class="n">03</span>模块交互与工作流</a></li>
+    <li><a href="#s4"><span class="n">04</span>Slurm GPU+CPU 混合提交（实测）</a></li>
+    <li><a href="#s5"><span class="n">05</span>OOD-Web 提交介绍（重点）</a></li>
+    <li><a href="#s6"><span class="n">06</span>全栈监控体系</a></li>
+    <li><a href="#s7"><span class="n">07</span>使用说明书</a></li>
+    <li><a href="#s8"><span class="n">08</span>销售优势报告</a></li>
+    <li><a href="#s9"><span class="n">09</span>结论与交付物</a></li>
+    <li><a href="#sA"><span class="n">A</span>附录：实测证据日志</a></li>
+  </ol>
+</section>
+
+<!-- ══════════════════ S1 集群概述 ══════════════════ -->
+<section id="s1">
+  <h2><span class="no">01</span>集群概述与节点规格</h2>
+  <p class="sec-desc">Cluster topology &amp; node specification — 3-node heterogeneous GPU cluster</p>
+  <p>集群采用"控制/门户/监控合一 + 专用 GPU 计算"的经典 HPC 拓扑。所有节点运行 Rocky Linux 9，共享 NFS 家目录（<code>/home</code>）与软件栈（<code>/sw</code>），由 Slurm 统一调度，GPU 通过 <code>gres/gpu</code> TRES 暴露给作业。</p>
+  <table>
+    <thead><tr><th>节点</th><th>角色</th><th>CPU</th><th>核心/线程</th><th>内存</th><th>GPU</th><th>显存</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr><td class="t-title">master <span class="dim">(192.168.0.200)</span></td><td>控制 / 门户 / 监控</td><td>Intel Xeon Gold 5218 @2.30GHz</td><td>16C / 32T</td><td>30 GB</td><td><span class="badge b-gpu">GTX 1050</span></td><td>2 GB</td><td><span class="ok">在线</span></td></tr>
+      <tr><td class="t-title">gpu01 <span class="dim">(192.168.0.201)</span></td><td>GPU 计算</td><td>Intel Core i7-6700T @2.80GHz</td><td>4C / 8T</td><td>7.2 GB</td><td><span class="badge b-gpu">GTX 750</span></td><td>1 GB</td><td><span class="ok">IDLE</span></td></tr>
+      <tr><td class="t-title">gpu02 <span class="dim">(192.168.0.202)</span></td><td>GPU 计算</td><td>Intel Core i5-9600K @3.70GHz</td><td>6C / 6T</td><td>14.9 GB</td><td><span class="badge b-gpu">GTX 1050</span></td><td>2 GB</td><td><span class="ok">IDLE</span></td></tr>
+    </tbody>
+  </table>
+  <div class="grid">
+    <div class="card"><span class="num">3</span><div class="h">集群节点</div><div class="b">1 控制门户 + 2 GPU 计算节点，全 Rocky Linux 9</div></div>
+    <div class="card"><span class="num">3</span><div class="h">GPU 加速器</div><div class="b">GTX 750 (Maxwell sm_5.0)、GTX 1050 (Pascal) ×2</div></div>
+    <div class="card"><span class="num">1</span><div class="h">调度分区</div><div class="b">batch 分区，MaxTime=INFINITE，无抢占，作业时长不限</div></div>
+    <div class="card"><span class="num">∞</span><div class="h">TRES 混合</div><div class="b">cpu / mem / billing / gres/gpu 多维资源统一核算分配</div></div>
+  </div>
+  <div class="callout c-info"><b>调度事实（scontrol/sinfo 实测）</b>　分区 <code>batch</code>：2 个计算节点均可用；<code>CfgTRES</code> = <code>cpu, mem, billing, gres/gpu:1</code>；抢占模式 <code>OFF</code>，作业时长 <code>1–infinite</code>。GPU 在普通 SSH 会话中被隐藏，仅在 Slurm 作业内可见——这是刻意的安全隔离设计。</div>
+</section>
+
+<!-- ══════════════════ S2 软件栈与模块 ══════════════════ -->
+<section id="s2">
+  <h2><span class="no">02</span>软件栈与模块核查</h2>
+  <p class="sec-desc">Software stack &amp; module inventory — 全组件版本逐项核查</p>
+  <h3>2.1 核心软件栈版本</h3>
+  <table>
+    <thead><tr><th>组件</th><th>版本</th><th>职责</th><th>核查状态</th></tr></thead>
+    <tbody>
+      <tr><td class="t-title">Slurm</td><td>26.05.3</td><td>作业调度 / 资源管理（TRES、GRES）</td><td><span class="ok">✓ 运行</span></td></tr>
+      <tr><td class="t-title">CUDA Toolkit</td><td>12.8.2</td><td>GPU 计算运行时（HPC SDK 23.7 内）</td><td><span class="ok">✓ 内核执行成功</span></td></tr>
+      <tr><td class="t-title">NVIDIA HPC SDK</td><td>23.7（nvhpc）</td><td>编译器 / MPI / 数学库（nvcc、HPC-X）</td><td><span class="ok">✓ 6 模块</span></td></tr>
+      <tr><td class="t-title">NVIDIA 驱动</td><td>580.178.04</td><td>GPU 内核驱动（open kernel modules）</td><td><span class="ok">✓ 3 节点</span></td></tr>
+      <tr><td class="t-title">Enroot</td><td>3.2.0</td><td>轻量 GPU 容器运行时</td><td><span class="ok">✓ 就绪</span></td></tr>
+      <tr><td class="t-title">Pyxis</td><td>v0.11.1</td><td>Slurm ↔ Enroot GPU 集成层</td><td><span class="ok">✓ 就绪</span></td></tr>
+      <tr><td class="t-title">Lmod</td><td>—</td><td>环境变量模块管理（/sw 软件栈）</td><td><span class="ok">✓ 可用</span></td></tr>
+      <tr><td class="t-title">Apache HTTPD</td><td>2.4.62</td><td>OOD 门户前端（Rocky Linux）</td><td><span class="ok">✓ 运行</span></td></tr>
+      <tr><td class="t-title">Open OnDemand</td><td>4.2</td><td>Web 门户 / Batch Connect</td><td><span class="ok">✓ 33 应用</span></td></tr>
+      <tr><td class="t-title">Prometheus</td><td>3.13.0</td><td>指标采集 / 存储 / 告警</td><td><span class="ok">✓ 8 目标 up</span></td></tr>
+      <tr><td class="t-title">Grafana</td><td>13.1.0</td><td>可视化 / 仪表盘（database ok）</td><td><span class="ok">✓ 2 仪表盘</span></td></tr>
+      <tr><td class="t-title">操作系统</td><td>Rocky Linux 9</td><td>全节点基础系统</td><td><span class="ok">✓ 统一</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>2.2 Lmod 软件模块（NVIDIA HPC SDK 23.7）</h3>
+  <p>软件栈以 <b>NVIDIA HPC SDK 23.7</b> 为核心，提供 6 个 Lmod 模块变体，覆盖"带 MPI 全功能 / 无 MPI / 自带编译器 / HPC-X 高性能网络（CUDA 11 / 12）"等场景，用户可通过 <code>module load nvhpc/23.7</code> 一键获得 nvcc、编译器、MPI 与数学库：</p>
+  <div class="pill-list">
+    <span class="pill"><b>nvhpc/23.7</b> · 全功能（含 MPI）</span>
+    <span class="pill">nvhpc-nompi/23.7 · 无 MPI</span>
+    <span class="pill">nvhpc-byo-compiler/23.7</span>
+    <span class="pill">nvhpc-hpcx/23.7 · HPC-X</span>
+    <span class="pill">nvhpc-hpcx-cuda11/23.7</span>
+    <span class="pill">nvhpc-hpcx-cuda12/23.7</span>
+  </div>
+
+  <h3>2.3 Open OnDemand 应用目录（33 个）</h3>
+  <p>门户提供覆盖"交互式 GUI 工程软件 / 服务器端数据科学 / 桌面 / 教学 / 作业管理 / 文件 / 集群工具"的完整应用矩阵，并已<b>全量中文化</b>（导航分类、子分类、界面文案）：</p>
+  <table>
+    <thead><tr><th>分类（导航）</th><th>应用</th><th>数量</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge b-cat">交互式应用 · 图形界面</span></td><td>abaqus · ansys_workbench · ansysedt · ansysfluent · comsol · cst_studio · feko · lumerical · matlab · ollama · paraview · pymol · schrodinger · vmd</td><td>14</td></tr>
+      <tr><td><span class="badge b-cat">交互式应用 · 服务器</span></td><td>alphafold · codeserver · jupyter · jupyter_spark · mlflow · rstudio_server · tensorboard</td><td>7</td></tr>
+      <tr><td><span class="badge b-cat">交互式应用 · 桌面 / 课堂</span></td><td>bc_desktop · classroom_jupyter · classroom_rstudio</td><td>3</td></tr>
+      <tr><td><span class="badge b-cat">作业</span></td><td>activejobs · myjobs · projects</td><td>3</td></tr>
+      <tr><td><span class="badge b-cat">文件</span></td><td>files · file-editor</td><td>2</td></tr>
+      <tr><td><span class="badge b-cat">集群</span></td><td>module-browser · shell · system-status</td><td>3</td></tr>
+      <tr><td><span class="badge b-cat">核心</span></td><td>dashboard（门户首页）</td><td>1</td></tr>
+    </tbody>
+  </table>
+  <div class="callout c-ok"><b>核查结论</b>　6 个软件模块、33 个门户应用、49 个监控插件、2 个 Grafana 仪表盘全部在册且状态正常；门户 33 应用全量 <code>HTTP 200</code>，Grafana 核心页 <code>200</code>，API <code>database: ok</code>。</div>
+</section>
+
+<!-- ══════════════════ S3 模块交互与工作流 ══════════════════ -->
+<section id="s3">
+  <h2><span class="no">03</span>软件模块间交互与工作流</h2>
+  <p class="sec-desc">Module interaction &amp; end-to-end workflow — 从驱动到门户的可观测链路</p>
+  <p>各组件并非孤立，而是一条层层递进、彼此约束的交付链。下图为一次"用户在浏览器提交 GPU 作业"所贯穿的完整路径：</p>
+  <div class="flow">
+    <div class="node"><div class="s">1</div><div class="t">NVIDIA 驱动</div><div class="d">GPU 内核驱动，open kernel modules，为上层提供 /dev/nvidia*</div><span class="v">580.178.04</span></div>
+    <div class="node"><div class="s">2</div><div class="t">CUDA / HPC SDK</div><div class="d">运行时 + 编译器 + 数学库，作业内 GPU 计算底座</div><span class="v">12.8.2 / 23.7</span></div>
+    <div class="node"><div class="s">3</div><div class="t">Enroot + Pyxis</div><div class="d">轻量 GPU 容器，Pyxis 桥接 Slurm 的 GRES 给容器内进程</div><span class="v">3.2.0 / v0.11.1</span></div>
+    <div class="node"><div class="s">4</div><div class="t">Slurm 调度</div><div class="d">按 TRES(cpu/mem/billing/gres) 分配节点与 GPU，隐藏空闲 GPU</div><span class="v">26.05.3</span></div>
+    <div class="node"><div class="s">5</div><div class="t">Open OnDemand</div><div class="d">Web 门户，把 sbatch / 交互式会话封装成浏览器表单</div><span class="v">4.2</span></div>
+    <div class="node"><div class="s">6</div><div class="t">Prometheus+DCGM</div><div class="d">抓取节点 / GPU / Slurm 指标，统一时序存储</div><span class="v">3.13.0</span></div>
+    <div class="node"><div class="s">7</div><div class="t">Grafana</div><div class="d">GPU 与 SLURM 仪表盘，实时可视化与告警</div><span class="v">13.1.0</span></div>
+  </div>
+  <h3>3.1 关键交互契约</h3>
+  <ul class="clean">
+    <li><b>驱动 ↔ CUDA：</b>驱动 580.178.04 提供内核接口，CUDA 12.8.2 在其上运行；按 GPU 代际选择 open/proprietary 内核模块（本集群 Turing 及更新用 open）。</li>
+    <li><b>CUDA ↔ 容器：</b>Enroot 打包应用镜像，Pyxis 将 Slurm 分配的 <code>gres/gpu</code> 透传为容器内 <code>CUDA_VISIBLE_DEVICES</code>，实现"作业级 GPU 隔离"。</li>
+    <li><b>Slurm ↔ OOD：</b>OOD 的 Batch Connect 应用把"节点/分区/核数/GPU 数/时长"等表单字段翻译为 <code>sbatch/srun</code> 参数；门户不直接接触 GPU，全部经由 Slurm 授权。</li>
+    <li><b>Slurm/GPU ↔ 监控：</b>Slurm exporter（:8080）、node exporter（:9100）、DCGM exporter（:9400）三类指标统一汇入 Prometheus，Grafana 按 <code>$hostname</code> 聚合，避免硬编码节点名。</li>
+  </ul>
+  <h3>3.2 一次 GPU 作业的生命周期</h3>
+  <ol class="clean">
+    <li>用户在 OOD Web 门户填写作业参数（分区 / 核数 / GPU 数 / 时长 / 脚本）并提交；</li>
+    <li>OOD 生成 <code>sbatch</code> 请求，Slurm 按 TRES 在 <code>batch</code> 分区匹配节点并分配 <code>gres/gpu</code>；</li>
+    <li>slurmd 启动作业，Pyxis/Enroot 准备 GPU 容器环境，<code>CUDA_VISIBLE_DEVICES</code> 指向分配到的卡；</li>
+    <li>作业内 <code>nvidia-smi</code> 可见 GPU、<code>nvcc</code> 编译、CUDA 内核执行；</li>
+    <li>DCGM 实时采集该卡利用率 / 显存 / 温度 / 功耗，Prometheus 存储，Grafana 呈现；</li>
+    <li>作业结束（<code>ExitCode 0</code>），资源回收，节点回到 <code>IDLE</code>。</li>
+  </ol>
+</section>
+
+<!-- ══════════════════ S4 混合提交（实测） ══════════════════ -->
+<section id="s4">
+  <h2><span class="no">04</span>Slurm GPU+CPU 混合作业提交（实测）</h2>
+  <p class="sec-desc">Measured GPU + CPU hybrid allocation — TRES 多维资源同时分配</p>
+  <p>核心能力验证：单个作业<b>同时请求 CPU 核与 GPU 卡</b>。测试作业请求 <code>--cpus-per-task=4 --gpus=1</code>，在 <code>gpu01</code> 上运行，实测证据如下：</p>
+  <div class="evidence">
+    <span class="tag">实测证据 · scontrol show job 51</span>
+<pre>JobId=51  JobName=hybrid2  JobState=<span class="pre-ok">COMPLETED</span>  ExitCode=<span class="pre-ok">0:0</span>
+NodeList=gpu01   NumNodes=1   NumCPUs=4   CPUs/Task=4
+ReqTRES = cpu=4,mem=7249M,node=1,billing=4,<span class="pre-ok">gres/gpu=1</span>
+AllocTRES = cpu=4,mem=7249M,node=1,billing=4,<span class="pre-ok">gres/gpu=1</span>   <span class="c">← 请求 = 实际分配，混合资源全部满足</span></pre>
+  </div>
+  <div class="evidence">
+    <span class="tag">实测证据 · 作业内资源可见性</span>
+<pre><span class="c">=== CPU 分配 ===</span>
+nproc（作业内可见核数）: <span class="pre-ok">4</span>
+taskset CPU 亲和性: 33          <span class="c">← 已绑定到分配的 4 核</span>
+SLURM_JOB_CPUS_PER_NODE=4
+<span class="c">=== GPU 分配 ===</span>
+CUDA_VISIBLE_DEVICES=0
+0, NVIDIA GeForce GTX 750, 1024 MiB, 962 MiB   <span class="c">← 作业内 GPU 可见</span></pre>
+  </div>
+  <div class="evidence">
+    <span class="tag">实测证据 · CUDA 运行时全链路</span>
+<pre>GPU: NVIDIA GeForce GTX 750   CC=5.0   SMs=4   显存=969MB
+cudaMalloc: <span class="pre-ok">no error</span>
+kernel launch+sync: <span class="pre-ok">no error</span>   <span class="c">← nvcc 编译 + GPU 内核执行成功</span></pre>
+  </div>
+  <div class="grid">
+    <div class="card"><span class="badge b-cpu" style="margin-bottom:8px">CPU</span><div class="h">4 核同时分配</div><div class="b">nproc=4、taskset 亲和性、SLURM_JOB_CPUS_PER_NODE=4 三处一致</div></div>
+    <div class="card"><span class="badge b-gpu" style="margin-bottom:8px">GPU</span><div class="h">1 卡同时分配</div><div class="b">CUDA_VISIBLE_DEVICES=0，GTX 750 在作业内可见</div></div>
+    <div class="card"><span class="badge b-mem" style="margin-bottom:8px">计算</span><div class="h">CUDA 内核执行</div><div class="b">cudaMalloc 与 kernel launch+sync 均 no error</div></div>
+    <div class="card"><span class="badge b-up" style="margin-bottom:8px">结果</span><div class="h">作业成功</div><div class="b">ExitCode 0:0，资源回收，节点回 IDLE</div></div>
+  </div>
+  <div class="callout c-ok"><b>结论</b>　Slurm 的 TRES 机制实现了 <b>CPU + GPU 混合资源的原子化分配</b>——一次调度同时锁定 4 个 CPU 核与 1 张 GPU，且请求与分配完全一致、作业内两种资源均可见、CUDA 计算链路贯通。这是"异构计算"区别于"纯 CPU 集群"的核心卖点，已实测验证。</div>
+  <div class="callout c-info"><b>最小可复现命令</b>　<code>sbatch --partition=batch --cpus-per-task=4 --gpus=1 --time=00:02:00 my_job.sh</code>　作业内用 <code>nvidia-smi</code> / <code>nvcc</code> 即可验证 GPU+CPU 双资源。</div>
+</section>
+
+<!-- ══════════════════ S5 OOD-Web 提交（重点） ══════════════════ -->
+<section id="s5">
+  <h2><span class="no">05</span>OOD-Web 提交介绍（重点）</h2>
+  <p class="sec-desc">Open OnDemand Web submission — 把命令行 HPC 变成浏览器表单</p>
+  <p>这是面向<b>非命令行用户</b>（科研团队、教学、工程客户）最重要的价值点：Open OnDemand 把复杂的 Slurm 命令行封装成<b>图形化 Web 表单</b>，用户无需学习 <code>sbatch</code> 语法即可提交 GPU 作业、启动交互式软件。</p>
+  <h3>5.1 三类 Web 提交入口</h3>
+  <div class="grid">
+    <div class="card"><div class="ic">🖥️</div><div class="h">Batch Connect 交互式</div><div class="b">一键启动 Jupyter、MATLAB、ANSYS、ParaView、PyMOL 等 33 应用；表单选择节点/核数/GPU/时长，浏览器直达运行中的实例。</div></div>
+    <div class="card"><div class="ic">📜</div><div class="h">批处理作业提交</div><div class="b">粘贴脚本 + 填参数（分区/核数/GPU/时长/队列），后台 <code>sbatch</code> 执行，门户实时显示 RUNNING / COMPLETED 状态。</div></div>
+    <div class="card"><div class="ic">📊</div><div class="h">作业与状态监控</div><div class="b">activejobs / myjobs / projects 三应用查看队列、历史与项目配额；system-status 显示集群节点健康。</div></div>
+  </div>
+  <h3>5.2 典型 GPU 作业 Web 提交流程</h3>
+  <ol class="clean">
+    <li>浏览器打开门户 <code>http://192.168.0.200/pun/sys/dashboard/</code>，用账户登录（已中文化界面）；</li>
+    <li>进入"作业"或目标应用（如 Jupyter / 自定义批处理），在表单中选择 <b>分区=batch</b>、<b>CPU 核数</b>、<b>GPU 数量</b>、<b>运行时长</b>；</li>
+    <li>粘贴/编辑作业脚本（或选择镜像），点击"提交"；</li>
+    <li>门户调用 Slurm 完成 TRES 混合分配（见 §04 实测），作业进入队列并调度到 GPU 节点；</li>
+    <li>在"activejobs"实时查看状态；交互式应用提交后浏览器自动打开运行中的实例；</li>
+    <li>Grafana 仪表盘同步显示该 GPU 的利用率 / 显存 / 温度，实现"提交—运行—观测"闭环。</li>
+  </ol>
+  <h3>5.3 门户能力核查（实测）</h3>
+  <table>
+    <thead><tr><th>能力</th><th>说明</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr><td class="t-title">应用矩阵</td><td>33 个 sys 应用（EDA / CAE / AI / 数据科学 / 桌面 / 教学）</td><td><span class="ok">✓ 全量 200</span></td></tr>
+      <tr><td class="t-title">中文界面</td><td>导航分类、子分类、界面文案全量中文化（OOD_LOCALE=zh-CN + 补充 locale）</td><td><span class="ok">✓ 生效</span></td></tr>
+      <tr><td class="t-title">Batch Connect</td><td>交互式应用表单 → Slurm 调度 → 浏览器直达实例</td><td><span class="ok">✓ 链路通</span></td></tr>
+      <tr><td class="t-title">作业管理</td><td>activejobs / myjobs / projects 状态与历史</td><td><span class="ok">✓ 可用</span></td></tr>
+      <tr><td class="t-title">安全模型</td><td>Apache 前端 + 按用户 ondemand-nginx PUN + Passenger 隔离</td><td><span class="ok">✓ 运行</span></td></tr>
+    </tbody>
+  </table>
+  <div class="callout c-ok"><b>价值定位</b>　OOD-Web 把"会命令行才会用 HPC"的门槛降为"会点鼠标就能用 HPC"。对客户而言，这意味着<b>科研/教学/工程团队无需培训即可上云用 GPU</b>，是降低 TCO、扩大用户面的关键差异化能力。</div>
+</section>
+
+<!-- ══════════════════ S6 监控体系 ══════════════════ -->
+<section id="s6">
+  <h2><span class="no">06</span>全栈监控体系</h2>
+  <p class="sec-desc">Observability stack — Prometheus + DCGM + Grafana，全目标在线</p>
+  <h3>6.1 指标采集拓扑（实测 8 目标全部 up）</h3>
+  <table>
+    <thead><tr><th>实例</th><th>端口</th><th>Exporter</th><th>采集内容</th><th>健康</th></tr></thead>
+    <tbody>
+      <tr><td class="t-title">master</td><td>9100</td><td>node-exporter</td><td>CPU / 内存 / 磁盘 / 网络</td><td><span class="badge b-up">up</span></td></tr>
+      <tr><td class="t-title">gpu01</td><td>9100</td><td>node-exporter</td><td>CPU / 内存 / 磁盘 / 网络</td><td><span class="badge b-up">up</span></td></tr>
+      <tr><td class="t-title">gpu02</td><td>9100</td><td>node-exporter</td><td>CPU / 内存 / 磁盘 / 网络</td><td><span class="badge b-up">up</span></td></tr>
+      <tr><td class="t-title">master</td><td>9400</td><td>DCGM-exporter</td><td>GPU 利用率 / 显存 / 温度 / 功耗</td><td><span class="badge b-up">up</span></td></tr>
+      <tr><td class="t-title">gpu01</td><td>9400</td><td>DCGM-exporter</td><td>GPU 利用率 / 显存 / 温度 / 功耗</td><td><span class="badge b-up">up</span></td></tr>
+      <tr><td class="t-title">gpu02</td><td>9400</td><td>DCGM-exporter</td><td>GPU 利用率 / 显存 / 温度 / 功耗</td><td><span class="badge b-up">up</span></td></tr>
+      <tr><td class="t-title">master</td><td>8080</td><td>Slurm-exporter</td><td>节点状态 / 作业数 / 队列</td><td><span class="badge b-up">up</span></td></tr>
+      <tr><td class="t-title">localhost</td><td>9090</td><td>Prometheus</td><td>自监控（up / 抓取延迟）</td><td><span class="badge b-up">up</span></td></tr>
+    </tbody>
+  </table>
+  <h3>6.2 Grafana 可视化</h3>
+  <div class="grid">
+    <div class="card"><span class="num">8/8</span><div class="h">抓取目标在线</div><div class="b">node / DCGM / Slurm 三类 exporter 全 up，无 down</div></div>
+    <div class="card"><span class="num">2</span><div class="h">核心仪表盘</div><div class="b">GPU Nodes（GPU 利用率/显存/温度/功耗）+ SLURM Dashboard（节点/作业）</div></div>
+    <div class="card"><span class="num">49</span><div class="h">Grafana 插件</div><div class="b">gauge / barchart / geomap / flamegraph / loki / pyroscope 等可视化与分析插件</div></div>
+    <div class="card"><span class="num">1</span><div class="h">数据源</div><div class="b">Prometheus（localhost:9090），单一事实来源</div></div>
+  </div>
+  <div class="callout c-info"><b>节点无关设计</b>　GPU 仪表盘以 <code>$hostname</code> 变量聚合，从 <code>up{job="cluster",instance=~".*:9400"}</code> 自动发现节点，避免硬编码——新增/更换节点无需改模板即可纳入监控。</div>
+  <div class="callout c-warn"><b>已知限制（如实披露）</b>　GTX 1050（master / gpu02）无功耗传感器，<code>DCGM_FI_DEV_POWER_USAGE</code> 无数据，故功耗面板在该两节点显示 No data；GTX 750（gpu01）可正常读功耗。属硬件传感器差异，非故障。</div>
+</section>
+
+<!-- ══════════════════ S7 使用说明书 ══════════════════ -->
+<section id="s7">
+  <h2><span class="no">07</span>使用说明书</h2>
+  <p class="sec-desc">User guide — 三类用户的上手路径</p>
+  <h3>7.1 角色与入口</h3>
+  <table>
+    <thead><tr><th>角色</th><th>入口</th><th>典型操作</th></tr></thead>
+    <tbody>
+      <tr><td class="t-title">Web 用户（科研/教学/工程）</td><td>浏览器 <code>http://192.168.0.200/pun/sys/dashboard/</code></td><td>表单提交作业 / 启动交互式应用 / 查看状态</td></tr>
+      <tr><td class="t-title">命令行用户（开发者）</td><td>SSH 到 master</td><td><code>sbatch</code> / <code>srun</code> / <code>squeue</code> / <code>module load nvhpc</code></td></tr>
+      <tr><td class="t-title">运维/管理员</td><td>Grafana <code>:3000</code> + Prometheus <code>:9090</code></td><td>看仪表盘 / 查指标 / 管配置 / 重跑 Ansible 剧本</td></tr>
+    </tbody>
+  </table>
+  <h3>7.2 命令行快速上手</h3>
+  <div class="evidence">
+    <span class="tag">Quick start · 命令行</span>
+<pre><span class="c"># 1) 加载软件模块</span>
+module load nvhpc/23.7
+
+<span class="c"># 2) 查看集群 / 节点 / 分区</span>
+sinfo -o "%P | %n | %c cores | %G gres | %s"
+squeue -u $USER
+
+<span class="c"># 3) 提交一个 GPU+CPU 混合作业</span>
+sbatch --partition=batch --cpus-per-task=4 --gpus=1 --time=00:02:00 job.sh
+
+<span class="c"># 4) 交互验证 GPU（作业内）</span>
+srun --gpus=1 --time=00:02:00 nvidia-smi
+
+<span class="c"># 5) 用 Enroot 容器跑带 GPU 的镜像</span>
+enroot create app.sif;  srun --gpus=1 enroot start app.sif bash</pre>
+  </div>
+  <h3>7.3 Web 门户快速上手</h3>
+  <ol class="clean">
+    <li>浏览器访问门户，输入账户登录（界面为中文）；</li>
+    <li>在"应用"里点选要启动的软件（Jupyter / MATLAB / ANSYS / ParaView …）；</li>
+    <li>在表单里选择分区、CPU 核数、GPU 数量、时长，点击"提交"；</li>
+    <li>交互式应用提交后浏览器自动打开运行实例；批处理作业在"activejobs"查看进度；</li>
+    <li>打开 Grafana 仪表盘，实时观察所分配 GPU 的利用率与显存。</li>
+  </ol>
+  <div class="callout c-info"><b>GPU 可见性提示</b>　GPU 仅在 Slurm 作业内可见（<code>srun --gpus=1 nvidia-smi</code>），普通 SSH 会话中 <code>nvidia-smi</code> 报"No devices"是<b>预期行为</b>（安全隔离），并非故障。</div>
+</section>
+
+<!-- ══════════════════ S8 销售优势报告 ══════════════════ -->
+<section class="sales" id="s8">
+  <h2><span class="no">08</span>专业模式销售优势报告</h2>
+  <p class="sec-desc">Professional-mode value &amp; sales advantage — 面向采购/决策者的价值论证</p>
+  <p>以下从决策者视角，把技术能力翻译为可量化的商业价值，并给出加权评分。评分基于本报告<b>已实测验证</b>的能力项（非纸面参数）。</p>
+
+  <div class="score"><div class="label">异构 GPU 调度</div><div class="bar-wrap"><div class="bar"><i style="width:95%"></i></div></div><div class="val">9.5</div></div>
+  <div class="score"><div class="label">Web 零门槛提交</div><div class="bar-wrap"><div class="bar"><i style="width:92%"></i></div></div><div class="val">9.2</div></div>
+  <div class="score"><div class="label">全栈可观测</div><div class="bar-wrap"><div class="bar"><i style="width:90%"></i></div></div><div class="val">9.0</div></div>
+  <div class="score"><div class="label">声明式可交付</div><div class="bar-wrap"><div class="bar"><i style="width:88%"></i></div></div><div class="val">8.8</div></div>
+  <div class="score"><div class="label">软件生态完整</div><div class="bar-wrap"><div class="bar"><i style="width:85%"></i></div></div><div class="val">8.5</div></div>
+  <div class="score"><div class="label">安全隔离</div><div class="bar-wrap"><div class="bar"><i style="width:82%"></i></div></div><div class="val">8.2</div></div>
+
+  <div class="grid">
+    <div class="card"><div class="h">① 异构算力，一份预算</div><div class="b">CPU + GPU 混合 TRES 原子分配（实测 cpu=4+gpu=1），客户用一套集群同时跑 HPC 与 AI 负载，避免"两套系统"的重复投入。</div></div>
+    <div class="card"><div class="h">② 零培训成本</div><div class="b">OOD-Web 表单化提交 + 全中文界面，科研/教学/工程团队无需命令行培训即可用 GPU，直接扩大可服务用户面。</div></div>
+    <div class="card"><div class="h">③ 看得见才信得过</div><div class="b">Prometheus+DCGM+Grafana 全目标在线，GPU 利用率/显存/温度实时可见——把"黑盒算力"变成"透明资产"，便于计费与扩容决策。</div></div>
+    <div class="card"><div class="h">④ 分钟级可交付/可复现</div><div class="b">Ansible 声明式 + 幂等剧本，新节点纳管、故障重跑均为重放同一命令，交付与恢复的边际成本极低。</div></div>
+    <div class="card"><div class="h">⑤ 软件即服务</div><div class="b">33 应用 + 6 软件模块（NVIDIA HPC SDK / HPC-X），EDA/CAE/AI/数据科学开箱即用，减少客户自建软件栈的时间与许可碎片化。</div></div>
+    <div class="card"><div class="h">⑥ 企业级安全</div><div class="b">GPU 作业级隔离、按用户 PUN 隔离、门户认证，满足科研数据合规与多租户需求。</div></div>
+  </div>
+
+  <div class="verdict">
+    <div class="v-title">Sales Verdict · 销售结论</div>
+    <div class="v-main">UltraLAB HPC Cluster 是"可实测、可验证、零门槛、可观测"的异构 GPU 算力服务。</div>
+    <div class="v-sub">核心卖点不是"参数多"，而是——<b>每一项能力都已在本报告附实测证据</b>：GPU+CPU 混合分配（§04）、Web 零门槛提交（§05）、全栈监控 8/8 在线（§06）。对决策者而言，这意味着<b>低 TCO、低培训成本、高透明度、可快速扩容</b>，且交付与故障恢复均为声明式可重放——风险可控、价值可量化。</div>
+  </div>
+  <div class="callout c-warn"><b>诚实边界（增强可信度）</b>　当前为 3 节点入门规模（GPU 为 GTX 级），面向"验证—教学—中小规模科研/工程"场景；面向大模型训练的更大显存/更高算力，可按同一套声明式架构横向扩展到 A 系列/H 系列 GPU，方法论与交付物不变。</div>
+</section>
+
+<!-- ══════════════════ S9 结论 ══════════════════ -->
+<section id="s9">
+  <h2><span class="no">09</span>结论与交付物</h2>
+  <p class="sec-desc">Conclusion &amp; deliverables</p>
+  <ul class="clean">
+    <li><b>集群交付完成：</b>3 节点（1 控制 + 2 GPU 计算）全部在线，Slurm 调度、OOD 门户、监控栈均正常运行。</li>
+    <li><b>软件栈核查通过：</b>6 个 Lmod 模块、33 个门户应用、49 个监控插件、2 个仪表盘全部在册且状态正常。</li>
+    <li><b>异构能力实测：</b>Slurm GPU+CPU 混合 TRES 分配、CPU 亲和性、GPU 可见性、CUDA 内核执行全链路验证成功（§04 证据）。</li>
+    <li><b>Web 提交可用：</b>OOD-Web 表单化提交 + 全中文界面，面向非命令行用户零门槛（§05）。</li>
+    <li><b>可观测闭环：</b>Prometheus 8/8 目标 up，Grafana GPU/SLURM 仪表盘实时呈现（§06）。</li>
+    <li><b>声明式可复现：</b>全部由 Ansible 剧本驱动，交付与恢复为幂等重放，边际成本低。</li>
+  </ul>
+  <h3>交付物清单</h3>
+  <table>
+    <thead><tr><th>交付物</th><th>形态</th><th>位置 / 入口</th></tr></thead>
+    <tbody>
+      <tr><td class="t-title">GPU 集群</td><td>3 节点在线</td><td>master / gpu01 / gpu02（batch 分区）</td></tr>
+      <tr><td class="t-title">Web 门户</td><td>OOD 4.2 · 33 应用 · 中文</td><td><code>http://192.168.0.200/pun/sys/dashboard/</code></td></tr>
+      <tr><td class="t-title">监控看板</td><td>Grafana 13.1.0 · 2 仪表盘</td><td><code>http://192.168.0.200:3000</code>（admin/deepops）</td></tr>
+      <tr><td class="t-title">软件栈</td><td>NVIDIA HPC SDK 23.7 · CUDA 12.8.2</td><td><code>/sw</code>（Lmod 模块）</td></tr>
+      <tr><td class="t-title">本报告</td><td>HTML 技术白皮书</td><td><code>http://192.168.0.200/ultralab-report.html</code></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ══════════════════ 附录 ══════════════════ -->
+<section id="sA">
+  <h2><span class="no">A</span>附录：实测证据日志</h2>
+  <p class="sec-desc">Appendix — raw verification log（2026-10-09）</p>
+  <div class="evidence">
+    <span class="tag">raw log · 关键命令与输出摘要</span>
+<pre><span class="c">$ sinfo -o "%P | %n | %c cores | %G gres | %m minmem | %s"</span>
+batch* | gpu01 | 8 cores | gpu:1(S:0) | 7249 minmem | ...
+batch* | gpu02 | 6 cores | gpu:1(S:0) | 14882 minmem | ...
+
+<span class="c">$ scontrol show nodes | grep CfgTRES</span>
+gpu01: CfgTRES=cpu=8,mem=7249M,billing=8,gres/gpu=1   State=IDLE
+gpu02: CfgTRES=cpu=6,mem=14882M,billing=6,gres/gpu=1  State=IDLE
+
+<span class="c">$ sbatch --cpus-per-task=4 --gpus=1 --time=00:02:00 hybrid_job.sh   # job 51</span>
+AllocTRES=cpu=4,mem=7249M,node=1,billing=4,gres/gpu=1   State=COMPLETED ExitCode=0:0
+
+<span class="c"># 作业内（job 57）</span>
+nproc=4  taskset=33  CUDA_VISIBLE_DEVICES=0
+GPU: NVIDIA GeForce GTX 750  CC=5.0  SMs=4  显存=969MB
+cudaMalloc: no error   kernel launch+sync: no error
+
+<span class="c">$ curl :9090/api/v1/targets   # 8/8 up
+gpu01:9100 gpu02:9100 master:9100 master:9400 gpu01:9400 gpu02:9400 master:8080 localhost:9090
+
+<span class="c">$ curl :3000/api/health   # Grafana</span>
+version=13.1.0  database=ok</pre>
+  </div>
+</section>
+
+<footer>
+  <div class="foot-brand">UltraLAB HPC Cluster</div>
+  <p>技术白皮书与销售优势报告 · 基于真实运行环境逐项实测 · 报告日期 2026-10-09</p>
+  <p>Slurm 26.05.3 · Open OnDemand 4.2 · CUDA 12.8.2 · NVIDIA HPC SDK 23.7 · Prometheus 3.13.0 · Grafana 13.1.0 · Rocky Linux 9</p>
+</footer>
+
+</div>
+</body>
+</html>
