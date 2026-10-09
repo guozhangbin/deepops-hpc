@@ -29,16 +29,20 @@ description: Deploy the Open OnDemand web portal (UltraLAB HPC Cluster) on a Dee
 
 2. Configure:
 
-   - `config/inventory`: portal host under `[ood-portal]`.
+    - `config/inventory`: portal host under `[ood-portal]`.
     - `config/group_vars/ood-portal.yml`: branding
       (`ood_portal_title: "UltraLAB HPC Cluster"`), the Slurm cluster
       (`clusters:` with `adapter: slurm` — note `bin:` must be the bin
       *directory*, e.g. `/usr/local/bin`), the Batch Connect app catalog
-      (`ood_apps_catalog`: every "basic" app listed with an `enabled` toggle
-      — `repo:` apps are git-cloned, `local:` apps are copied from `apps/`
-      of this repo; disabled apps are removed so the menu only shows active
-      ones), and portal login users (`ood_portal_users`). Only the DeepOps
-      Jupyter app (`apps/jupyter/`) is enabled by default.
+      (`ood_apps_catalog`: every catalog app listed with an `enabled`
+      toggle — `repo:` apps are git-cloned, `local:` apps are copied from
+      `apps/` of this repo; disabled apps are removed so the menu only
+      shows active ones), and portal login users (`ood_portal_users`).
+      In `config.example` the 10 OSC "basic" apps are enabled by default
+      (including the OSC `jupyter` app, which REPLACES the local
+      `apps/jupyter` when enabled); the commercial, classroom, and 6 local
+      apps (ansysedt, ansysfluent, lumerical, alphafold, cst_studio, feko)
+      are disabled until the software is on the nodes.
 
 3. Preflight — must pass before deploying:
 
@@ -58,13 +62,16 @@ description: Deploy the Open OnDemand web portal (UltraLAB HPC Cluster) on a Dee
 
     This installs httpd + OOD 4.2 from yum.osc.edu, the OOD SELinux policy
     (SELinux is enforcing), installs the Batch Connect apps from the catalog
-    (the DeepOps Jupyter app from `apps/jupyter/` by default; any catalog
-    app with `enabled: true` — `repo:` apps git-cloned, `local:` apps copied
-    from `apps/`), writes the Slurm cluster and branding config,
-    installs the `/rnode` node-proxy Apache config, opens the portal host
-    in the compute nodes' firewalls, installs the Jupyter runtime
-    (python3 + pip + jupyterlab) on the `slurm-node` hosts, and adds the
-    login users to `/etc/httpd/.htpasswd`.
+    (any catalog app with `enabled: true` — `repo:` apps git-cloned,
+    `local:` apps copied from `apps/`; the OSC `jupyter` app replaces the
+    local `apps/jupyter` when enabled), writes the Slurm cluster and
+    branding config, installs the `/rnode` node-proxy Apache config, opens
+    the portal host in the compute nodes' firewalls, installs the node-side
+    runtimes on the `slurm-node` hosts (Jupyter for the web apps; TigerVNC
+    + Xfce4 + websockify for the Desktop app and the VNC local apps),
+    writes the Shell web-terminal allowlist
+    (`/etc/ood/config/apps/shell/env`), and adds the login users to
+    `/etc/httpd/.htpasswd`.
     Expect roughly 5–15 minutes on a first run.
 
 5. Validate on the portal host — the success signal is this, not the play
@@ -78,22 +85,28 @@ description: Deploy the Open OnDemand web portal (UltraLAB HPC Cluster) on a Dee
 
 6. Smoke test the full chain (not just the dashboard):
 
-   - Open `http://<portal-host>/`, log in with the portal user.
+    - Open `http://<portal-host>/`, log in with the portal user.
     - Launch Jupyter from the dashboard (pick mode, GPU count, walltime).
     - Confirm the session job lands in Slurm on a GPU node:
       `squeue`; `scontrol show job <id>` → `AllocTRES=...gres/gpu=N`
       (proves the GPU was actually allocated), and `SubmitLine` shows
       `-p batch --gpus-per-node N --time HH:MM:SS`.
-   - Confirm JupyterLab started inside the job: the session output dir
-     (`/home/<user>/ondemand/data/sys/dashboard/batch_connect/sys/jupyter/
-     output/<uuid>/`) has `output.log` (Jupyter startup + `nvidia-smi`)
-     and `connection.yml` (host/port of the running server).
-   - Confirm the "Connect" URL works through the node proxy:
-     `curl -s -o /dev/null -w "%{http_code}\n" -u <user>:<pw>
-     "http://<portal-host>/rnode/<node>/<port>/lab"` → `200` with
-     `<title>JupyterLab`.
+    - Confirm JupyterLab started inside the job: the session output dir
+      (`/home/<user>/ondemand/data/sys/dashboard/batch_connect/sys/jupyter/
+      output/<uuid>/`) has `output.log` (Jupyter startup + `nvidia-smi`)
+      and `connection.yml` (host/port of the running server).
+    - Confirm the "Connect" URL works through the node proxy:
+      `curl -s -o /dev/null -w "%{http_code}\n" -u <user>:<pw>
+      "http://<portal-host>/rnode/<node>/<port>/lab"` → `200` with
+      `<title>JupyterLab`.
+    - Open the Shell web terminal
+      `http://<portal-host>/pun/sys/shell/ssh/<host>` for EACH cluster
+      host (master + compute nodes) and confirm a live prompt (WebSocket
+      connects and `hostname` echoes). Requires the allowlist env
+      (step 4) and the user in `/etc/localusers` on the nodes
+      (see failure branches below).
 
- ## Failure branches
+## Failure branches
 
 - **GPU job hangs or fails with `Slurmd could not connect IO` /
   `No route to host`** (or `srun --gpus=1 …` from the login node never
@@ -196,6 +209,34 @@ description: Deploy the Open OnDemand web portal (UltraLAB HPC Cluster) on a Dee
   (`/var/www/ood/apps/sys/<app>`) and the cluster file
   (`/etc/ood/config/clusters.d/deepops.yml`); look at
   `/var/log/httpd/error_log` and `/opt/ood/log`.
+- **Shell web terminal closes immediately with 3146 / "Host … not
+  specified in allowlist or cluster configs"**: the app validates each
+  host against the cluster configs + `OOD_SSHHOST_ALLOWLIST` read from
+  `/etc/ood/config/apps/shell/env` (production). The wrapper task writes
+  it from the `ood-portal` + `slurm-node` inventory groups — verify the
+  file exists and lists the host, then restart the user's PUN (or rerun
+  the playbook; the restart task kills the stale Passenger instance that
+  still holds the old env).
+- **Shell web terminal connects but the node refuses SSH:
+  "Access denied by pam_slurm_adopt: you have no active jobs"**: the
+  node-side allowlist is `/etc/localusers` (managed from
+  `/etc/slurm/localusers.backup` by the slurm prolog/epilog). Put the
+  portal user into `slurm_allow_ssh_user` in
+  `config/group_vars/slurm-cluster.yml` and rerun the Slurm playbook —
+  NOTE the `localusers` tag is NOT targetable with `--tags` (the role's
+  `include_tasks` statement is untagged and gets filtered out, so the
+  tagged task inside never runs); a full slurm-cluster run is required,
+  or append the user to BOTH `/etc/localusers` and
+  `/etc/slurm/localusers.backup` on each node directly.
+- **Jupyter "Connect" link 404s / POSTs to `/node/<host>/<port>/login`**:
+  the OSC upstream `view.html.erb` expects a password login that an
+  authless Jupyter launch does not have, and `/node/` does not strip the
+  proxy prefix. The wrapper installs a plain-link view pointing at
+  `/rnode/<host>/<port>/<jupyter_api>` — if it goes missing, rerun the
+  ood-portal playbook (the OSC role re-clones the app on every run, so
+  the patch is re-applied on every run; `rescued=1` on the portal host in
+  the recap is the expected signature of that clone conflict, not an
+  error).
 - **Session submit fails with `undefined method 'to_h' for an instance of
   String`** (shown on the form as "Failed to submit session ..."): the
   rendered `submit.yml.erb` is not a YAML hash. Classic cause: an ERB

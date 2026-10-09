@@ -1,7 +1,8 @@
 # DeepOps Slurm GPU 集群部署文档
 
 > 本文档整理基于 [NVIDIA DeepOps](README.md) 在一套 3 节点实验室 GPU 集群上
-> 部署并调通 **Slurm GPU 批处理集群** 的完整过程：集群拓扑、已部署组件、
+> 部署并调通 **Slurm GPU 批处理集群** 与 **Open OnDemand Web 门户**
+> （UltraLAB HPC Cluster）的完整过程：集群拓扑、已部署组件、
 > 日常使用方法、部署中排查并修复的问题、验证结果，以及后续运维注意事项。
 > 供集群使用者与运维人员参考。
 >
@@ -17,11 +18,29 @@
 - [2. 集群拓扑](#2-集群拓扑)
 - [3. 已部署组件](#3-已部署组件)
 - [4. 快速使用](#4-快速使用)
+  - [4.1 查看集群状态](#41-查看集群状态)
+  - [4.2 提交 GPU 作业](#42-提交-gpu-作业)
+  - [4.3 容器化 GPU 作业（Enroot / Pyxis）](#43-容器化-gpu-作业enroot--pyxis)
+  - [4.4 监控入口](#44-监控入口head-节点-1921680200)
 - [5. 部署过程与解决的问题](#5-部署过程与解决的问题)
+  - [5.1 容器 / 镜像源](#51-容器--镜像源)
+  - [5.2 依赖与离线获取](#52-依赖与离线获取)
+  - [5.3 网络 / 防火墙](#53-网络--防火墙)
+  - [5.4 Slurm 运行时](#54-slurm-运行时)
 - [6. 验证结果](#6-验证结果)
 - [7. 运维注意事项](#7-运维注意事项)
+  - [7.1 节点重启后进入 `DOWN` 的恢复](#71-节点重启后进入-downnode-unexpectedly-rebooted的恢复)
+  - [7.2 离线 / 镜像依赖](#72-离线--镜像依赖重跑需注意)
+  - [7.3 防火墙端口](#73-防火墙端口)
+  - [7.4 GPU 可见性](#74-gpu-可见性)
 - [8. 重新部署与关键文件](#8-重新部署与关键文件)
-- [9. Open OnDemand 门户(UltraLAB HPC Cluster)](#9-open-ondemand-门户ultralab-hpc-cluster)
+  - [8.1 标准部署流程](#81-标准部署流程)
+  - [8.2 关键文件位置](#82-关键文件位置)
+  - [8.3 参考](#83-参考)
+- [9. Open OnDemand 门户（UltraLAB HPC Cluster）](#9-open-ondemand-门户ultralab-hpc-cluster)
+  - [9.1 本地应用的通用表单字段](#91-本地应用的通用表单字段)
+  - [9.2 部署与校验](#92-部署与校验)
+  - [9.3 关键文件](#93-关键文件)
 
 
 ---
@@ -181,7 +200,7 @@ ansible-playbook -l slurm-cluster playbooks/slurm-cluster.yml -k
 ```
 
 由于本环境**出口受限**且 Rocky 9 / Slurm 26.05 存在若干兼容性差异，部署过程中
-共排查并修复 15 类问题（完整逐条见 [CHANGELOG.md](CHANGELOG.md)）。按类别归纳：
+共排查并修复 14 类问题（完整逐条见 [CHANGELOG.md](CHANGELOG.md)）。按类别归纳：
 
 ### 5.1 容器 / 镜像源
 1. **Docker 启动失败**：`/etc/docker/daemon.json` 与 kubespray 写入的
@@ -410,7 +429,9 @@ OnDemand），作为通过 Web 提交 GPU 作业的门户：
 
 ### 9.1 本地应用的通用表单字段
 
-6 个本地应用共享一组 CHPC 风格的字段（详见各 `apps/<name>/README.md`）：
+6 个本地应用在标准作业分配字段（**Nodes** / **Cores per node** / **GPUs** /
+**Max run time**，映射到 `sbatch -N` / `--ntasks-per-node` / `--gpus-per-node` /
+`--time`，详见各 `apps/<name>/README.md`）之外，共享一组 CHPC 风格的字段：
 
 | 字段 | 效果 |
 |------|------|

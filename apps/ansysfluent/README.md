@@ -40,6 +40,11 @@ rendering fallback), `I_MPI_PMI_EXTENSIONS=on` (Intel MPI under Slurm).
 
 ## Form fields
 
+* **Nodes** / **Cores per node** — `sbatch -N` / `--ntasks-per-node`
+  (defaults: 1 / 4).
+* **GPUs** — `0` = CPU-only job; otherwise `--gpus-per-node <n>`.
+* **Max run time (HH:MM:SS)** — `--time` (default `08:00:00`); the session
+  is killed when it elapses.
 * **Memory per node (GB)** — `0` = cluster default; otherwise
   `sbatch --mem <N>G`.
 * **Node list** — restricts the job with `sbatch -w` (e.g. `gpu01`).

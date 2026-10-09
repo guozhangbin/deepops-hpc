@@ -26,8 +26,10 @@ pattern.
 ## Form fields
 
 * **Interface** — Jupyter Lab (default) or classic Notebook.
-* **GPUs** — 0 or 1 (the allocation is shown by `nvidia-smi` in the job
-  log when present).
+* **GPUs** — 0 or 1, default 1 (the allocation is shown by `nvidia-smi` in
+  the job log when present).
+* **Max run time (HH:MM:SS)** — `--time` (default `04:00:00`); the session
+  is killed when it elapses.
 * **Memory (GB)** — `0` = cluster default; otherwise `sbatch --mem <N>G`.
 * **Environment module** — loaded before launch when set; portable form
   of CHPC's `auto_modules_*` version selector.
