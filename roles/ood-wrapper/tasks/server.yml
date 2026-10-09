@@ -479,6 +479,34 @@
     - not (ood_jupyter_local_enabled | default(true) | bool)
     - jupyter_osc_form.stat.exists | default(false)
 
+# The OSC upstream view.html.erb POSTs a password to /node/<host>/<port>/login.
+# That 404s here: this app launches Jupyter authless (no /login endpoint) and
+# /node/ does not strip the proxy prefix (it forwards the full path). Install
+# the DeepOps view instead: a plain link to /rnode/<host>/<port>/<jupyter_api>,
+# which mod_ood_proxy strips before forwarding. The OSC role re-clones the app
+# on every run, so this patch re-applies on every playbook run (like the
+# templates above).
+- name: Install DeepOps view.html.erb for the OSC Jupyter app
+  ansible.builtin.copy:
+    dest: /var/www/ood/apps/sys/jupyter/view.html.erb
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      <%# Connection view shown in the session panel while the job runs.
+          Rendered with the binding of the connection info (host, port,
+          password, and any conn_params such as jupyter_api).
+          The /rnode/<host>/<port> path is reverse-proxied by Apache
+          (mod_ood_proxy) to the compute node running the job. -%>
+      <%- base_url = "/rnode/#{host}/#{port}" -%>
+
+      <a href="<%= base_url %>/<%= jupyter_api %>" class="btn btn-primary" target="_blank">
+        <i class="fa fa-cogs"></i> Connect to Jupyter
+      </a>
+  when:
+    - not (ood_jupyter_local_enabled | default(true) | bool)
+    - jupyter_osc_form.stat.exists | default(false)
+
 # ---------------------------------------------------------------------------
 # Desktop app (bc_desktop — ships inside the ondemand rpm)
 #
