@@ -2431,7 +2431,7 @@
         "multi": false,
         "name": "hostname",
         "options": [],
-        "query": "query_result(label_replace(DCGM_FI_DEV_POWER_USAGE{instance=~\".*:9400\"}, \"instance\", \"$1\", \"instance\", \"(.*):9400.*\"))",
+        "query": "query_result(label_replace(up{job=\"cluster\",instance=~\".*:9400\"}, \"instance\", \"$1\", \"instance\", \"(.*):9400.*\"))",
         "refresh": 1,
         "regex": "/.*instance=\"([^\"]*).*/",
         "skipUrlSync": false,

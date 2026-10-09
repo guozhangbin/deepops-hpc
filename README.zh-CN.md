@@ -33,6 +33,7 @@
   - [7.2 离线 / 镜像依赖](#72-离线--镜像依赖重跑需注意)
   - [7.3 防火墙端口](#73-防火墙端口)
   - [7.4 GPU 可见性](#74-gpu-可见性)
+  - [7.5 监控缺节点 / GPU 功耗指标缺失](#75-监控缺节点--gpu-功耗指标缺失2026-10-09-修复)
 - [8. 重新部署与关键文件](#8-重新部署与关键文件)
   - [8.1 标准部署流程](#81-标准部署流程)
   - [8.2 关键文件位置](#82-关键文件位置)
@@ -267,7 +268,8 @@ ansible-playbook -l slurm-cluster playbooks/slurm-cluster.yml -k
   ```
 
 - **监控**：Prometheus / Grafana / Alertmanager / slurm-exporter 均 `Up`；
-  node-exporter + DCGM-exporter 三台 `Up`；6 个抓取目标全部 `up`；
+  node-exporter + DCGM-exporter 三台 `Up`；7 个抓取目标
+  （master/gpu01/gpu02 × 9100/9400 + master:8080 slurm-exporter）全部 `up`；
   9100/9400 端口返回 HTTP `200`。
 - **门户**：`validate_ood.py --json` 返回 `"ok": true`
   （登录 / 品牌 / 集群配置 / 23 个应用全部在位；Shell 网页终端
@@ -336,6 +338,33 @@ sinfo
 
 计算节点对普通 SSH 隐藏 GPU，仅在 Slurm 作业内可见。验证 GPU 请用
 `srun --gpus=1 nvidia-smi` 或 `validate_slurm.py`，**不要**用裸 SSH `nvidia-smi`。
+
+### 7.5 监控缺节点 / GPU 功耗指标缺失（2026-10-09 修复）
+
+**现象**：Grafana（`http://192.168.0.200:3000`）GPU 仪表盘 `server` 下拉框
+只见 `gpu01`，缺 `master` 与 `gpu02`。
+
+**原因**（两条独立问题叠加）：
+1. Prometheus 的 file_sd 端点模板（`node-exporter.yml.j2` /
+   `dcgm-exporter.yml.j2`）只枚举 `slurm-node` 组——`master` 上运行中的
+   node-exporter / DCGM-exporter 从未被抓取；
+2. `master` 与 `gpu02` 的 **GTX 1050 无功耗传感器**
+   （`nvidia-smi -q -d POWER` 显示 `Average Power Draw: N/A`），DCGM 对这两台
+   不导出 `DCGM_FI_DEV_POWER_USAGE`；而原 GPU 仪表盘的 `server` 下拉框正是
+   用该指标构建的 → 没有此字段的节点直接从下拉框"消失"（gpu01 的 GTX 750
+   可正常读功耗，所以只有它可见）。
+
+**修复**（已合入仓库并生效）：
+- 两个端点模板改为枚举 `slurm-master` + `slurm-node`，7 个抓取目标全部 `up`
+  （Prometheus file_sd 自动感知文件变化，无需重启）；
+- GPU 仪表盘 `server` 下拉框改为由
+  `up{job="cluster",instance=~".*:9400"}` 构建
+  （`src/dashboards/gpu-dashboard.json`），与具体 DCGM 字段解耦，缺字段的
+  节点也保持可见。
+
+**残留现象**：master/gpu02 的功耗面板（GPU Power Usage / Power Total）仍无
+数据——硬件限制（该卡无传感器），非软件问题；利用率 / 温度 / 显存面板
+三台均正常。
 
 ## 8. 重新部署与关键文件
 
