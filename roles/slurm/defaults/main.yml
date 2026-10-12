@@ -11,6 +11,9 @@ slurm_version: "26.05.3"
 slurm_src_url: "https://download.schedmd.com/slurm/slurm-{{ slurm_version }}.tar.bz2"
 slurm_build_make_clean: no
 slurm_build_dir_cleanup: no
+slurm_build: yes
+slurm_upgrade: no
+slurm_downgrade: no
 slurm_config_dir: /etc/slurm
 slurmctl_config_dir: /sw/.slurm
 slurm_sysconf_dir: /etc/sysconfig

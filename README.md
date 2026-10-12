@@ -92,6 +92,19 @@ To try DeepOps before deploying it on an actual cluster, a virtualized version o
 
 Consult the [Virtual DeepOps Deployment Guide](virtual/README.md) to build a GPU-enabled virtual cluster with DeepOps.
 
+### Reference Implementation: UltraLAB Heterogeneous Cluster
+
+DeepOps has been successfully validated for heterogeneous GPU environments through the **UltraLAB** project. This reference implementation demonstrates the deployment of a mixed-hardware cluster with full-stack observability and a user-friendly web portal.
+
+- **Hardware**: 3-node mixed setup (Intel Xeon Gold / Core i7 / Core i5) with NVIDIA GTX 750 and 1050 GPUs.
+- **Software Stack**: Rocky Linux 9, Slurm 26.05.3, Open OnDemand 4.2 (Chinese Localized), CUDA 12.8.2, and Prometheus 3.13.0 / Grafana 13.1.0.
+- **Key Enhancements & Verifications**:
+  - **Reliability**: Fixed critical `undefined variable` crashes in Slurm build and controller tasks by optimizing task sequencing and implementing defensive default variables.
+  - **Resource Management**: Verified atomic hybrid TRES allocation (CPU + GPU) and CPU affinity.
+  - **Observability**: Implemented a node-independent monitoring system with DCGM, ensuring real-time GPU telemetry across disparate hardware.
+  - **Accessibility**: Fully localized the Open OnDemand portal to Chinese, providing a zero-training entry point for non-CLI users to submit GPU jobs.
+- **Documentation**: A comprehensive technical whitepaper detailing the architecture and verification evidence is available at `/ultralab-report.html` on the cluster portal.
+
 ## Updating DeepOps
 
 To update from a previous version of DeepOps to a newer release, please consult the [DeepOps Update Guide](docs/deepops/update-deepops.md).

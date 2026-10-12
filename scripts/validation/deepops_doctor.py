@@ -211,21 +211,84 @@ def main():
             "%d host(s) report NVIDIA PCI devices (informational)" % gpu_hosts,
         )
 
+        # Check disk space on root or software partition
         rc, out, _ = run(
-            [
-                "ansible", "all", "-i", inventory, "-m", "shell", "-o",
-                "-a", "systemctl show ssh.service sshd.service -p DeviceAllow 2>/dev/null | grep -ci nvidiactl || true",
-            ],
+            ["ansible", "all", "-i", inventory, "-m", "shell", "-o",
+             "-a", "df / --output=avail | tail -n 1"],
             timeout=300,
         )
-        overrides = count_positive_stdout_hosts(out) if rc == 0 else 0
+        # Simple parsing: assume output is in 1K blocks, check if > 20GB (20 * 1024 * 1024)
+        disk_ok = True
+        if rc == 0:
+            for line in out.splitlines():
+                if "SUCCESS" in line:
+                    val = line.rsplit("(stdout)", 1)[1].strip().split("\\n")[0].strip()
+                    try:
+                        if int(val) < 20 * 1024 * 1024:
+                            disk_ok = False
+                    except ValueError:
+                        pass
+                elif "FAILED" in line:
+                    disk_ok = False
         check(
             checks,
-            "ssh_gpu_visibility_override",
-            True,
-            "%d host(s) restrict GPU device access for SSH sessions (Slurm login "
-            "GPU hiding); on those hosts direct nvidia-smi over SSH is expected to "
-            "fail and srun is the authoritative GPU test" % overrides,
+            "disk_space_sufficient",
+            disk_ok,
+            "at least 20GB free on /" if disk_ok else "insufficient disk space on one or more hosts",
+        )
+
+        # Check for port collisions (8080, 9090, 3000)
+        ports = ["8080", "9090", "3000"]
+        port_check_cmd = f"netstat -tulpn | grep -E ':( {'|'.join(ports)} ) '"
+        rc, out, _ = run(
+            ["ansible", "all", "-i", inventory, "-m", "shell", "-o",
+             f"-a", f"'{port_check_cmd} || true'"],
+            timeout=300,
+        )
+        port_collision = False
+        if rc == 0:
+            for line in out.splitlines():
+                if "SUCCESS" in line:
+                    val = line.rsplit("(stdout)", 1)[1].strip().split("\\n")[0].strip()
+                    if val:
+                        port_collision = True
+                        break
+        check(
+            checks,
+            "critical_ports_free",
+            not port_collision,
+            "ports %s are free" % (", ".join(ports)) if not port_collision else "port collision detected",
+        )
+
+        # Verify Sudo NOPASSWD capability
+        rc, out, _ = run(
+            ["ansible", "all", "-i", inventory, "-m", "shell", "-o",
+             "-a", "sudo -n true"],
+            timeout=300,
+        )
+        sudo_ok = (rc == 0 and out.count("FAILED") == 0)
+        check(
+            checks,
+            "sudo_nopasswd_configured",
+            sudo_ok,
+            "NOPASSWD sudo is active" if sudo_ok else "sudo requires password or not configured",
+        )
+
+        rc, out, _ = run(
+            ["ansible", "all", "-i", inventory, "-m", "shell", "-o",
+             "-a", "lspci -n -s $(lspci | grep -i nvidia | awk '{print $1}') | grep -i '10de' || true"],
+            timeout=300,
+        )
+        gpu_gen_ok = True
+        if rc == 0:
+            # This is just informational, but we can flag if no NVIDIA devices are found at all
+            if not out:
+                gpu_gen_ok = False
+        check(
+            checks,
+            "gpu_architecture_detected",
+            gpu_gen_ok,
+            "NVIDIA GPU architecture detected" if gpu_gen_ok else "No NVIDIA GPU detected",
         )
 
     ok = all(c["ok"] for c in checks)

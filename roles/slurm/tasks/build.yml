@@ -33,12 +33,6 @@
 ###########################################
 # Build Slurm
 ###########################################
-- name: default to building slurm
-  set_fact:
-    slurm_build: yes
-    slurm_upgrade: no
-    slurm_downgrade: no
-
 - name: check installed slurm version
   shell: "{{ slurm_install_prefix }}/sbin/slurmd --version | awk '{print $2}'"
   register: slurmd_reported_version
@@ -63,6 +57,24 @@
 - name: going to rebuild slurm?
   debug:
     msg: "Rebuild Slurm? {{ slurm_build }}"
+
+- name: calculate safe make jobs based on memory
+  set_fact:
+    slurm_make_jobs: "{{ [ansible_processor_vcpus, (ansible_memtotal_mb // 2048)] | min }}"
+  when: slurm_build
+
+- name: check disk space for build
+  shell: "df {{ slurm_build_dir | default('/tmp') }} --output=avail | tail -n 1"
+  register: build_disk_avail
+  changed_when: false
+  when: slurm_build
+
+- name: verify sufficient disk space for build
+  fail:
+    msg: "Insufficient disk space for Slurm build. Available: {{ build_disk_avail.stdout.strip() }} KB. Need at least 5242880 KB (5GB)."
+  when: 
+    - slurm_build
+    - build_disk_avail.stdout | trim | int < 5242880
 
 - name: install build dependencies
   apt:
@@ -175,19 +187,36 @@
   when: slurm_build and slurm_autodetect_nvml
 
 - name: build
-  shell: "make -j$(nproc) > build.log 2>&1"
+  shell: "make -j{{ slurm_make_jobs }} > build.log 2>&1"
   args:
     chdir: "{{ slurm_build_dir }}"
+  register: slurm_build_res
+  failed_when: slurm_build_res.rc != 0
   when: slurm_build
 
+- name: dump slurm build failure log
+  shell: "tail -n 100 {{ slurm_build_dir }}/build.log"
+  args:
+    chdir: "{{ slurm_build_dir }}"
+  register: build_log_tail
+  changed_when: false
+  when: slurm_build and slurm_build_res.failed
+  ignore_errors: yes
+
+- name: report build failure
+  fail:
+    msg: "Slurm build failed. Last 100 lines of log:\n{{ build_log_tail.stdout }}"
+  when: slurm_build and slurm_build_res.failed
+
+
 - name: build contrib
-  shell: "make -j$(nproc) contrib >> build.log 2>&1"
+  shell: "make -j{{ slurm_make_jobs }} contrib >> build.log 2>&1"
   args:
     chdir: "{{ slurm_build_dir }}"
   when: slurm_build
 
 - name: install
-  shell: "make -j$(nproc) install >> build.log 2>&1"
+  shell: "make -j{{ slurm_make_jobs }} install >> build.log 2>&1"
   args:
     chdir: "{{ slurm_build_dir }}"
   when: slurm_build
@@ -197,7 +226,7 @@
     - restart slurmctld
 
 - name: install contrib
-  shell: "make -j$(nproc) install-contrib >> build.log 2>&1"
+  shell: "make -j{{ slurm_make_jobs }} install-contrib >> build.log 2>&1"
   args:
     chdir: "{{ slurm_build_dir }}"
   when: slurm_build
@@ -207,13 +236,13 @@
     - restart slurmctld
 
 - name: build pam_slurm_adopt
-  shell: "make -j$(nproc) >> ../../build.log 2>&1"
+  shell: "make -j{{ slurm_make_jobs }} >> ../../build.log 2>&1"
   args:
     chdir: "{{ slurm_build_dir }}/contribs/pam_slurm_adopt"
   when: slurm_build
 
 - name: install pam_slurm_adopt
-  shell: "make -j$(nproc) install >> ../../build.log 2>&1"
+  shell: "make -j{{ slurm_make_jobs }} install >> ../../build.log 2>&1"
   args:
     chdir: "{{ slurm_build_dir }}/contribs/pam_slurm_adopt"
   when: slurm_build
@@ -221,6 +250,7 @@
     - restart slurmd
     - restart slurmdbd
     - restart slurmctld
+
 
 - name: fix library dir permissions
   file:
